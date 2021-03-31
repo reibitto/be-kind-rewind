@@ -1,11 +1,11 @@
 package bekindrewind.sttpclient
 
-import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher, VcrRecord, VcrRecordRequest, VcrRecordResponse }
+import bekindrewind.util.IOUtils
+import bekindrewind._
 import sttp.capabilities
 import sttp.client3._
 import sttp.model.{ Header, StatusCode }
 import sttp.monad.MonadError
-import bekindrewind.util.IOUtils
 
 import java.nio.file.Path
 import java.time.OffsetDateTime
@@ -120,15 +120,15 @@ class VcrBackend[F[_], P](
 
 object VcrBackend {
   def apply[F[_], P](
-    fallback: SttpBackend[F, P],
+    underlyingClient: SttpBackend[F, P],
     recordingPath: Path,
-    recordMode: RecordOptions = RecordOptions.default,
+    recordOptions: RecordOptions = RecordOptions.default,
     matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
   ): VcrBackend[F, P] =
     new VcrBackend[F, P](
-      fallback,
+      underlyingClient,
       recordingPath,
-      recordMode,
+      recordOptions,
       matcher
     )
 }

@@ -21,7 +21,11 @@ Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.
 ```scala
 import sttp.client3._
 
-val vcrBackend = VcrBackend(HttpURLConnectionBackend(), Paths.get("vcr/example.json"))
+val vcrBackend = VcrBackend(
+  underlyingClient = HttpURLConnectionBackend(),
+  recordingPath = Paths.get("vcr/example.json")
+)
+
 val request = basicRequest.get(uri"https://postman-echo.com/get?a=1")
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
@@ -41,11 +45,11 @@ import sttp.client3._
 import io.circe.syntax._
 
 val vcrBackend = VcrBackend(
-  HttpURLConnectionBackend(),
-  Paths.get("vcr/example2.json"),
+  underlyingClient = HttpURLConnectionBackend(),
+  recordingPath = Paths.get("vcr/example2.json"),
   matcher = VcrMatcher.groupBy { req =>
     // This is just an example. Handle errors properly in real code.
-    val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject)
+    val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject).get
 
     // We want to key off `method + uri + body (excluding the timestamp)`
     (req.method, req.uri, jsonBody.remove("timestamp"))
@@ -78,9 +82,9 @@ You can use the `shouldRecord` filter to choose which requests to record and whi
 
 ```scala
 val vcrBackend = VcrBackend(
-  HttpURLConnectionBackend(),
-  Paths.get("vcr/example3.json"),
-  RecordOptions.default.shouldRecord { req =>
+  underlyingClient = HttpURLConnectionBackend(),
+  recordingPath = Paths.get("vcr/example3.json"),
+  recordOptions = RecordOptions.default.shouldRecord { req =>
     req.uri.getHost == "postman-echo.com"
   }
 )
