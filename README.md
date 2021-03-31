@@ -54,7 +54,7 @@ val vcrBackend = VcrBackend(
   Paths.get("vcr/example2.json"),
   matcher = VcrMatcher.groupBy { req =>
     // This is just an example. Handle errors properly in real code.
-    val jsonBody = io.circe.parser.parse(req.body).toOption.get.asObject.get
+    val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject)
 
     // We want to key off `method + uri + body (excluding the timestamp)`
     (req.method, req.uri, jsonBody.remove("timestamp"))
