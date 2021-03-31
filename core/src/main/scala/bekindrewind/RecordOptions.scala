@@ -5,6 +5,9 @@ final case class RecordOptions(
   notRecordedThrowsErrors: Boolean,
   overwriteAll: Boolean
 ) {
+  def shouldRecord(shouldRecord: VcrRecordRequest => Boolean): RecordOptions =
+    copy(shouldRecord = shouldRecord)
+
   def notRecordedThrowsErrors(notRecordedThrowsErrors: Boolean): RecordOptions =
     copy(notRecordedThrowsErrors = notRecordedThrowsErrors)
 

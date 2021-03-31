@@ -22,7 +22,7 @@ class VcrBackend[F[_], P](
   override def send[T, R >: P with capabilities.Effect[F]](request: Request[T, R]): F[Response[T]] = {
     val recordRequest = VcrRecordRequest(
       request.method.method,
-      request.uri.toString,
+      request.uri.toJavaUri,
       requestBodyToString(request.body),
       toPlainHeaders(request.headers)
     )
@@ -48,7 +48,7 @@ class VcrBackend[F[_], P](
             val record = VcrRecord(
               VcrRecordRequest(
                 request.method.method,
-                request.uri.toString,
+                request.uri.toJavaUri,
                 requestBodyToString(request.body),
                 toPlainHeaders(request.headers)
               ),

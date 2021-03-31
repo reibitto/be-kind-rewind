@@ -9,14 +9,12 @@ import java.net.URI
 import scala.xml.{ Elem, XML }
 
 final case class VcrWSResponse(
-  url: String,
+  uri: URI,
   status: Int,
   statusText: String,
   headers: Map[String, Seq[String]],
   body: String
 ) extends WSResponse {
-  override def uri: URI = URI.create(url)
-
   override def underlying[T]: T = throw new Exception("VcrWSResponse does not have an underlying response.")
 
   override def cookies: collection.Seq[WSCookie] = throw new NotImplementedError("`cookies` are not recorded")

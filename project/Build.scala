@@ -52,7 +52,6 @@ object Build {
       incOptions ~= (_.withLogRecompileOnMacro(false)),
       autoAPIMappings := true,
       resolvers := Resolvers,
-      testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
       fork in Test := true,
       logBuffered in Test := false
     )

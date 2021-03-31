@@ -21,8 +21,8 @@ Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.
 ```scala
 import sttp.client3._
 
-val request = basicRequest.get(uri"https://postman-echo.com/get?a=1")
 val vcrBackend = VcrBackend(HttpURLConnectionBackend(), Paths.get("vcr/example.json"))
+val request = basicRequest.get(uri"https://postman-echo.com/get?a=1")
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
 // recorded response will be played back instead.
@@ -40,15 +40,6 @@ By default, Be Kind Rewind matches requests by `method + uri` only. Let's say yo
 import sttp.client3._
 import io.circe.syntax._
 
-val request = basicRequest
-  .post(uri"https://postman-echo.com/post")
-  .body(
-    Json.obj(
-      "user" -> "foo".asJson,
-      "timestamp" -> System.currentTimeMillis().asJson
-    ).noSpaces
-  )
-
 val vcrBackend = VcrBackend(
   HttpURLConnectionBackend(),
   Paths.get("vcr/example2.json"),
@@ -61,6 +52,16 @@ val vcrBackend = VcrBackend(
   }
 )
 
+val request = basicRequest
+  .post(uri"https://postman-echo.com/post")
+  .body(
+    Json.obj(
+      "user" -> "foo".asJson,
+      "timestamp" -> System.currentTimeMillis().asJson
+    ).noSpaces
+  )
+
+
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
 // recorded response will be played back instead.
 request.send(vcrBackend)
@@ -70,6 +71,33 @@ vcrBackend.close()
 ```
 
 Note that if you didn't exclude `timestamp`, a real HTTP request would be sent every run because the matcher would see each request as a unique one.
+
+### Only record a subset of HTTP requests
+
+You can use the `shouldRecord` filter to choose which requests to record and which to leave alone.
+
+```scala
+val vcrBackend = VcrBackend(
+  HttpURLConnectionBackend(),
+  Paths.get("vcr/example3.json"),
+  RecordOptions.default.shouldRecord { req =>
+    req.uri.getHost == "postman-echo.com"
+  }
+)
+
+// Will record this request since the host matches our filter.
+val request1 = basicRequest.get(uri"https://postman-echo.com/get?a=1")
+request1.send(vcrBackend)
+
+// The HTTP request will go through as normal, but it won't be recorded as it doesn't match the filter.
+val request2 = basicRequest.get(uri"https://api.ipify.org")
+val response2 = request2.send(vcrBackend)
+
+println(response2.body)
+
+// The recorded VCR file gets written on close
+vcrBackend.close()
+```
 
 ## Overview
 

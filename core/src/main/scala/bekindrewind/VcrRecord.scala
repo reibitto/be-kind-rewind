@@ -1,7 +1,9 @@
 package bekindrewind
 
+import bekindrewind.codec.Codecs._
 import io.circe.{ Decoder, Encoder }
 
+import java.net.URI
 import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -14,7 +16,7 @@ object VcrRecord {
   implicit val decoder: Decoder[VcrRecord] = Decoder.forProduct3("request", "response", "recordedAt")(VcrRecord.apply)
 }
 
-final case class VcrRecordRequest(method: String, uri: String, body: String, headers: Map[String, Seq[String]])
+final case class VcrRecordRequest(method: String, uri: URI, body: String, headers: Map[String, Seq[String]])
 
 object VcrRecordRequest {
   implicit val encoder: Encoder[VcrRecordRequest] =

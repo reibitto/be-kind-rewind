@@ -15,8 +15,7 @@ trait VcrClient {
       Map.empty[Any, StatefulVcrRecords]
     } else {
       VcrIO.read(recordingPath) match {
-        case Left(err) =>
-          err.printStackTrace()
+        case Left(_) =>
           Map.empty[Any, StatefulVcrRecords]
 
         case Right(records) =>

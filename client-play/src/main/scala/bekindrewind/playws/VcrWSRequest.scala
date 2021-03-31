@@ -93,7 +93,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
   override def execute(): Future[Response] = {
     val recordRequest = VcrRecordRequest(
       req.method,
-      req.url,
+      req.uri,
       req.body.toString,
       req.headers
     )
@@ -127,7 +127,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                              val record = VcrRecord(
                                VcrRecordRequest(
                                  req.method,
-                                 req.url,
+                                 req.uri,
                                  requestBody,
                                  req.headers
                                ),
