@@ -8,8 +8,9 @@ object Build {
   val BeKindRewindVersion = "0.1.0"
 
   object Version {
-    val circe = "0.13.0"
-    val sttp  = "3.2.0"
+    val circe   = "0.13.0"
+    val sttp    = "3.2.0"
+    val ziotest = "1.0.5"
   }
 
   lazy val ScalacOptions = Seq(
@@ -52,6 +53,7 @@ object Build {
       incOptions ~= (_.withLogRecompileOnMacro(false)),
       autoAPIMappings := true,
       resolvers := Resolvers,
+      testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
       fork in Test := true,
       logBuffered in Test := false
     )

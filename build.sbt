@@ -36,6 +36,8 @@ lazy val core = module("be-kind-rewind", Some("core"))
     fork := true,
     baseDirectory in run := file("."),
     libraryDependencies ++= Seq(
+      "dev.zio"  %% "zio-test"     % Version.ziotest % "test",
+      "dev.zio"  %% "zio-test-sbt" % Version.ziotest % "test",
       "io.circe" %% "circe-core"   % Version.circe,
       "io.circe" %% "circe-parser" % Version.circe
     )
