@@ -93,7 +93,7 @@ Here I'll note some pros and cons, as well as some precautions and things to avo
 - You need to be careful to not commit sensitive information such as API keys. Especially if your repository is public. Be extra careful if you don't have API keys that point to a sandbox environment.
 - You need to re-record tests if the API that you're using introduces breaking changes. In such cases you would have to update your tests regardless of whether you use VCR testing or not, but you would catch this earlier if you were always making real HTTP requests.
 
-  There's also an issue to [automate this]() in case you would like to specify something like "re-record the tests every week"
+  There's also an issue to [automate this](https://github.com/reibitto/be-kind-rewind/issues/5) in case you would like to specify something like "re-record the tests every week"
 
 ### How to write good VCR tests
 
