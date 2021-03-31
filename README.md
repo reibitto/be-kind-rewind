@@ -10,7 +10,7 @@ Be Kind Rewind is a VCR testing library for Scala, similar to the popular [vcr](
 
 The goal is to make integration tests fast, deterministic, and potentially eliminate the need for mocks and fakes completely for HTTP requests.
 
-Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.com), [play-ws](https://github.com/playframework/play-ws)) and eventually direct integrations with popular testing frameworks (scalatest, MUnit, specs2, zio-test, etc.).
+Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.com), [play-ws](https://github.com/playframework/play-ws)) and eventually direct integrations with popular testing frameworks ([scalatest](https://www.scalatest.org/), [MUnit](https://scalameta.org/munit/), [specs2](https://etorreborre.github.io/specs2/), [zio-test](https://zio.dev/docs/usecases/usecases_testing), etc.).
 
 (***Note:*** *Be Kind Rewind hasn't been officially released yet. The first release will be coming very soon.*)
 
@@ -34,7 +34,7 @@ vcrBackend.close()
 
 ### Using a custom matcher
 
-By default, Be Kind Rewind matches requests by `method + uri` only. Let's say you want to instead match on `method + uri + body`, except that you want to exclude one field in the JSON body (timestamp in this case). You can write use a custom matcher to accomplish this:
+By default, Be Kind Rewind matches requests by `method + uri` only. Let's say you want to instead match on `method + uri + body`, except that you want to exclude one field in the JSON body (timestamp in this case). You can write a custom matcher to accomplish this:
 
 ```scala
 import sttp.client3._
