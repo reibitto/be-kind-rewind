@@ -36,8 +36,9 @@ lazy val core = module("be-kind-rewind", Some("core"))
     fork := true,
     baseDirectory in run := file("."),
     libraryDependencies ++= Seq(
-      "io.circe" %% "circe-core"   % Version.circe,
-      "io.circe" %% "circe-parser" % Version.circe
+      "org.scalameta" %% "munit"        % Version.munit % Test,
+      "io.circe"      %% "circe-core"   % Version.circe,
+      "io.circe"      %% "circe-parser" % Version.circe
     )
   )
 
