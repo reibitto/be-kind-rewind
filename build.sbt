@@ -7,6 +7,7 @@ lazy val root = project
   .in(file("."))
   .aggregate(
     core,
+    clientAkkaHttp,
     clientSttp,
     clientPlay
   )
@@ -69,6 +70,19 @@ lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
     baseDirectory in run := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play-ws" % "2.8.7"
+    )
+  )
+  .dependsOn(core)
+
+lazy val clientAkkaHttp = module("be-kind-rewind-akka-http", Some("client-akka-http"))
+  .settings(
+    fork := true,
+    baseDirectory in run := file("."),
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-http"        % Version.akkaHttp,
+      "com.typesafe.akka" %% "akka-stream"      % Version.akka  % Provided,
+      "com.typesafe.akka" %% "akka-actor-typed" % Version.akka  % Provided,
+      "org.scalameta"     %% "munit"            % Version.munit % Test
     )
   )
   .dependsOn(core)
