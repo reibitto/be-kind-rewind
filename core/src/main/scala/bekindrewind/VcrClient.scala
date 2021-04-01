@@ -50,3 +50,9 @@ trait VcrClient {
   }
 
 }
+
+object VcrClient {
+
+  /** Name of header that specifies if the HTTP response came from the VCR cache or not. */
+  val vcrCacheHeaderName: String = "X-VCR-Cache"
+}

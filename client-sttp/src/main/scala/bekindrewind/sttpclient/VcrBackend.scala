@@ -34,7 +34,7 @@ class VcrBackend[F[_], P](
             Right(r.response.body).asInstanceOf[T], // TODO: This isn't good
             StatusCode(r.response.statusCode),
             r.response.statusText,
-            toSttpHeaders(r.response.headers)
+            toSttpHeaders(r.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")))
           )
         )
 
