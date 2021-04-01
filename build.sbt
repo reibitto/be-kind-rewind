@@ -39,8 +39,11 @@ lazy val core = module("be-kind-rewind", Some("core"))
       "org.scalameta" %% "munit"        % Version.munit % Test,
       "io.circe"      %% "circe-core"   % Version.circe,
       "io.circe"      %% "circe-parser" % Version.circe
-    )
+    ),
+    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoPackage := "bekindrewind"
   )
+  .enablePlugins(BuildInfoPlugin)
 
 lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   .settings(

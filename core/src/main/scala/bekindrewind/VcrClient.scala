@@ -45,7 +45,7 @@ trait VcrClient {
 
     VcrIO.write(
       recordingPath,
-      VcrRecords(allRecords, "0.1.0") // TODO: Don't hardcode version
+      VcrRecords(allRecords, BuildInfo.version)
     )
   }
 
