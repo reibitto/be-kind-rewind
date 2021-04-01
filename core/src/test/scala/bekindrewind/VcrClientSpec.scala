@@ -32,17 +32,12 @@ class VcrClientSpec extends FunSuite {
   }
 
   test("Client loads the previous record when being constructed") {
-    val req     = VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty)
-    val res     = VcrRecordResponse(200, "ok", Map.empty, "{}")
-    val at      = OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
-    val rawJson = s"""{ "version": "0.1.0",
-                     |  "records": [
-                     |    { "request": ${req.asJson},
-                     |      "response": ${res.asJson},
-                     |      "recordedAt": ${at.asJson}
-                     |    }
-                     |  ]
-                     |}""".stripMargin
+    val record  = VcrRecord(
+      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty),
+      VcrRecordResponse(200, "ok", Map.empty, "{}"),
+      OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
+    )
+    val rawJson = VcrRecords(Vector(record), "0.1.0").asJson.spaces2
 
     val recordingPath = Files.createTempFile("test", ".json")
     Files.writeString(recordingPath, rawJson)
@@ -52,7 +47,7 @@ class VcrClientSpec extends FunSuite {
     client.previouslyRecorded.get(true) match {
       case None           => fail("Should load the record !!")
       case Some(previous) =>
-        assertEquals(previous.records, Vector(VcrRecord(req, res, at)))
+        assertEquals(previous.records, Vector(record))
         assertEquals(previous.currentIndex.get(), 0)
     }
   }
