@@ -7,7 +7,6 @@ import io.circe.syntax._
 import java.net.URI
 import java.nio.file._
 import java.time.OffsetDateTime
-import scala.jdk.CollectionConverters._
 
 class VcrClientSpec extends FunSuite {
 
@@ -27,7 +26,7 @@ class VcrClientSpec extends FunSuite {
     assert(client.previouslyRecorded.isEmpty)
     assert(client.newlyRecorded.get().sizeIs == 1)
 
-    val savedJson = Files.readAllLines(recordingPath).asScala.mkString("")
+    val savedJson = Files.readString(recordingPath)
     val decoded   = decode[VcrRecords](savedJson).map(_.records)
     assertEquals(decoded, Right(Vector(record)))
   }
@@ -46,7 +45,7 @@ class VcrClientSpec extends FunSuite {
                      |}""".stripMargin
 
     val recordingPath = Files.createTempFile("test", ".json")
-    Files.write(recordingPath, Seq(rawJson).asJava)
+    Files.writeString(recordingPath, rawJson)
 
     val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher(_ => true))
     assert(client.newlyRecorded.get().isEmpty)
