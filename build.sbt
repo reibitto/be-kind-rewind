@@ -9,7 +9,8 @@ lazy val root = project
     core,
     clientAkkaHttp,
     clientSttp,
-    clientPlay
+    clientPlay,
+    clientPlayStandalone
   )
   .settings(
     name := "be-kind-rewind",
