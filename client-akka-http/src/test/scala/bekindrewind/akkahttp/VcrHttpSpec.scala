@@ -1,9 +1,9 @@
 package bekindrewind.akkahttp
 
-import bekindrewind._
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.RawHeader
+import bekindrewind._
 import munit._
 
 import java.nio.file.{ Files, Paths }
@@ -26,7 +26,7 @@ class VcrHttpSpec extends FunSuite {
       }))
     }
 
-    val recordingPath = Files.createTempFile(Paths.get("."), "test", ".vcr")
+    val recordingPath = Files.createTempFile("test", ".vcr")
     val vcrClient     = VcrHttp.create(
       stubSendRequest,
       recordingPath,
@@ -46,8 +46,14 @@ class VcrHttpSpec extends FunSuite {
       assertEquals(res1, HttpResponse(entity = binaryEntity))
       assertEquals(res2, HttpResponse(entity = jsonEntity))
 
-      assertEquals(res3, HttpResponse(entity = binaryEntity))
-      assertEquals(res4, HttpResponse(entity = jsonEntity))
+      assertEquals(
+        res3,
+        HttpResponse(entity = binaryEntity, headers = Seq(RawHeader(VcrClient.vcrCacheHeaderName, "true")))
+      )
+      assertEquals(
+        res4,
+        HttpResponse(entity = jsonEntity, headers = Seq(RawHeader(VcrClient.vcrCacheHeaderName, "true")))
+      )
 
       assertEquals(counter.get(), 2)
     }
