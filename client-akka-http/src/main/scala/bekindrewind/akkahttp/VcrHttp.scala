@@ -8,8 +8,6 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
 import akka.util.ByteString
-import io.circe.parser._
-import io.circe.syntax._
 
 import java.io.Closeable
 import java.net.URI
