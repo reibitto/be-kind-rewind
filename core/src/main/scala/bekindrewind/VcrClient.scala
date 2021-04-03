@@ -45,8 +45,14 @@ trait VcrClient {
 
     VcrIO.write(
       recordingPath,
-      VcrRecords(allRecords, "0.1.0") // TODO: Don't hardcode version
+      VcrRecords(allRecords, BuildInfo.version)
     )
   }
 
+}
+
+object VcrClient {
+
+  /** Name of header that specifies if the HTTP response came from the VCR cache or not. */
+  val vcrCacheHeaderName: String = "X-VCR-Cache"
 }

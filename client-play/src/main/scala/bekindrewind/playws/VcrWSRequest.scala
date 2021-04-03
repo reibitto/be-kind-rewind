@@ -3,7 +3,7 @@ package bekindrewind.playws
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import bekindrewind.{ VcrRecord, VcrRecordRequest, VcrRecordResponse }
+import bekindrewind.{ VcrClient, VcrRecord, VcrRecordRequest, VcrRecordResponse }
 import play.api.libs.ws._
 import play.api.mvc.MultipartFormData
 
@@ -106,7 +106,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
             r.request.uri,
             r.response.statusCode,
             r.response.statusText,
-            r.response.headers,
+            r.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")),
             r.response.body
           )
         )

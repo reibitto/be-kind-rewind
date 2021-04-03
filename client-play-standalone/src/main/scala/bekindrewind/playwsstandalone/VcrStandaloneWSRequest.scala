@@ -1,7 +1,7 @@
 package bekindrewind.playwsstandalone
 
 import akka.stream.Materializer
-import bekindrewind.{ VcrRecord, VcrRecordRequest, VcrRecordResponse }
+import bekindrewind.{ VcrClient, VcrRecord, VcrRecordRequest, VcrRecordResponse }
 import play.api.libs.ws._
 
 import java.net.URI
@@ -104,7 +104,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
             r.request.uri,
             r.response.statusCode,
             r.response.statusText,
-            r.response.headers,
+            r.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")),
             r.response.body
           )
         )

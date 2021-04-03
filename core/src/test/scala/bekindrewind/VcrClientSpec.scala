@@ -37,7 +37,7 @@ class VcrClientSpec extends FunSuite {
       VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
-    val rawJson = VcrRecords(Vector(record), "0.1.0").asJson.spaces2
+    val rawJson = VcrRecords(Vector(record), BuildInfo.version).asJson.spaces2
 
     val recordingPath = Files.createTempFile("test", ".json")
     Files.writeString(recordingPath, rawJson)
