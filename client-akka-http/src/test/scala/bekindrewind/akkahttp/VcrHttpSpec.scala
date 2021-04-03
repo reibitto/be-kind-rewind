@@ -26,7 +26,7 @@ class VcrHttpSpec extends FunSuite {
       }))
     }
 
-    val recordingPath = Files.createTempFile("test", ".vcr")
+    val recordingPath = Files.createTempFile(Paths.get("."), "test", ".vcr")
     val vcrClient     = VcrHttp.create(
       stubSendRequest,
       recordingPath,

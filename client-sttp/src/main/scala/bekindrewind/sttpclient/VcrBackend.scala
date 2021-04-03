@@ -24,7 +24,8 @@ class VcrBackend[F[_], P](
       request.method.method,
       request.uri.toJavaUri,
       requestBodyToString(request.body),
-      toPlainHeaders(request.headers)
+      toPlainHeaders(request.headers),
+      "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
     )
 
     findMatch(recordRequest) match {
@@ -50,13 +51,15 @@ class VcrBackend[F[_], P](
                 request.method.method,
                 request.uri.toJavaUri,
                 requestBodyToString(request.body),
-                toPlainHeaders(request.headers)
+                toPlainHeaders(request.headers),
+                "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
               ),
               VcrRecordResponse(
                 response.code.code,
                 response.statusText,
                 toPlainHeaders(response.headers),
-                responseBodyToString(response.body)
+                responseBodyToString(response.body),
+                response.contentType
               ),
               OffsetDateTime.now
             )

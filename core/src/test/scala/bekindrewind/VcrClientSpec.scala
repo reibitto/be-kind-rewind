@@ -17,8 +17,8 @@ class VcrClientSpec extends FunSuite {
     assert(client.newlyRecorded.get().isEmpty)
 
     val record = VcrRecord(
-      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty),
-      VcrRecordResponse(200, "ok", Map.empty, "{}"),
+      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
+      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
     client.newlyRecorded.set(Vector(record))
@@ -33,8 +33,8 @@ class VcrClientSpec extends FunSuite {
 
   test("Client loads the previous record when being constructed") {
     val record  = VcrRecord(
-      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty),
-      VcrRecordResponse(200, "ok", Map.empty, "{}"),
+      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
+      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
     val rawJson = VcrRecords(Vector(record), "0.1.0").asJson.spaces2

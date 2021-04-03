@@ -45,36 +45,46 @@ object VcrHttp {
         method = request.method.value,
         uri = URI.create(request.uri.toString()),
         body = requestBody,
-        headers = toVcrHeaders(request.headers)
+        headers = toVcrHeaders(request.headers),
+        httpVersion = request.protocol.value
       )
     }
 
-  private[akkahttp] def toAkkaResponse(vcrResponse: VcrRecordResponse): HttpResponse = {
-    val store = decode[AkkaHttpResponseStore](vcrResponse.body).toOption.get
+  private[akkahttp] def showContentType(contentType: ContentType): Option[String] =
+    Option.when(contentType != ContentTypes.NoContentType)(contentType.value)
+
+  private[akkahttp] def toAkkaResponse(
+    vcrRecordRequest: VcrRecordRequest,
+    vcrResponse: VcrRecordResponse
+  ): HttpResponse =
     HttpResponse(
       status = StatusCode.int2StatusCode(vcrResponse.statusCode),
       headers = toAkkaHeaders(vcrResponse.headers),
-      entity = HttpEntity.Strict(
-        ContentType.parse(store.contentType).getOrElse(???),
-        ByteString.apply(store.data)
-      ),
-      protocol = HttpProtocol.apply(store.httpProtocol)
+      entity = vcrResponse.contentType match {
+        case Some(value) =>
+          HttpEntity.Strict(
+            ContentType
+              .parse(value)
+              .getOrElse(
+                throw new IllegalStateException(s"Content-type of a recorded response can not be parsed: ${value}")
+              ),
+            ByteString.apply(vcrResponse.body)
+          )
+        case None        => HttpEntity(vcrResponse.body)
+      },
+      protocol = HttpProtocol.apply(vcrRecordRequest.httpVersion)
     )
-  }
 
   private[akkahttp] def toVcrResponse(
     response: HttpResponse
   )(implicit executionContext: ExecutionContext, materializer: Materializer): Future[VcrRecordResponse] =
-    Unmarshal(response).to[String].map { data =>
+    Unmarshal(response).to[String].map { responseBody =>
       VcrRecordResponse(
         statusCode = response.status.intValue(),
         statusText = response.status.reason(),
         headers = toVcrHeaders(response.headers),
-        body = AkkaHttpResponseStore(
-          httpProtocol = response.protocol.value,
-          contentType = response.entity.contentType.value,
-          data = data
-        ).asJson.noSpaces
+        body = responseBody,
+        contentType = showContentType(response.entity.contentType)
       )
     }
 
@@ -107,7 +117,7 @@ class VcrHttp private (
   def send(request: HttpRequest): Future[HttpResponse] =
     toVcrRequest(request).flatMap { vcrRequest =>
       this.findMatch(vcrRequest) match {
-        case Some(VcrRecord(_, response, _)) => Future.successful(toAkkaResponse(response))
+        case Some(VcrRecord(_, response, _)) => Future.successful(toAkkaResponse(vcrRequest, response))
         case None                            =>
           if (this.recordOptions.shouldRecord(vcrRequest)) {
             sendRequest(request).flatMap { response =>
