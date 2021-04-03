@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.headers.RawHeader
 import bekindrewind._
 import munit._
 
-import java.nio.file.{ Files, Paths }
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
