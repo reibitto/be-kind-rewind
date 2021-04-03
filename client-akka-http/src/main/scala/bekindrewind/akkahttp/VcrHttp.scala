@@ -56,8 +56,8 @@ object VcrHttp {
     vcrResponse: VcrRecordResponse
   ): HttpResponse =
     HttpResponse(
-      status = StatusCode.int2StatusCode(vcrResponse.statusCode),
-      headers = toAkkaHeaders(vcrResponse.headers),
+      status = StatusCodes.custom(vcrResponse.statusCode, vcrResponse.statusText),
+      headers = toAkkaHeaders(vcrResponse.headers + (VcrClient.vcrCacheHeaderName -> Seq("true"))),
       entity = vcrResponse.contentType match {
         case Some(value) =>
           HttpEntity.Strict(
