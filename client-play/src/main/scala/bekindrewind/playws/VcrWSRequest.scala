@@ -95,7 +95,8 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
       req.method,
       req.uri,
       req.body.toString,
-      req.headers
+      req.headers,
+      "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
     )
 
     owner.findMatch(recordRequest) match {
@@ -129,7 +130,8 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                                  req.method,
                                  req.uri,
                                  requestBody,
-                                 req.headers
+                                 req.headers,
+                                 "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
                                ),
                                VcrRecordResponse(
                                  res.status,
@@ -137,7 +139,8 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                                  res.headers.map { case (k, v) =>
                                    (k, v.toSeq)
                                  },
-                                 res.body
+                                 res.body,
+                                 Some(res.contentType)
                                ),
                                OffsetDateTime.now
                              )

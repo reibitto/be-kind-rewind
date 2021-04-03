@@ -11,6 +11,9 @@ object Build {
     val circe = "0.13.0"
     val sttp  = "3.2.0"
     val munit = "0.7.23"
+
+    val akka     = "2.6.13"
+    val akkaHttp = "10.2.4"
   }
 
   lazy val ScalacOptions = Seq(
