@@ -37,13 +37,17 @@ object VcrHttp {
     create(Http().singleRequest(_), recordingPath, recordOptions, matcher)
   }
 
-  private[akkahttp] def toVcrRequest(request: HttpRequest): VcrRecordRequest =
-    VcrRecordRequest(
-      method = request.method.value,
-      uri = URI.create(request.uri.toString()),
-      body = request.entity.toString,
-      headers = toVcrHeaders(request.headers)
-    )
+  private[akkahttp] def toVcrRequest(
+    request: HttpRequest
+  )(implicit executionContext: ExecutionContext, materializer: Materializer): Future[VcrRecordRequest] =
+    Unmarshal(request).to[String].map { requestBody =>
+      VcrRecordRequest(
+        method = request.method.value,
+        uri = URI.create(request.uri.toString()),
+        body = requestBody,
+        headers = toVcrHeaders(request.headers)
+      )
+    }
 
   private[akkahttp] def toAkkaResponse(vcrResponse: VcrRecordResponse): HttpResponse = {
     val store = decode[AkkaHttpResponseStore](vcrResponse.body).toOption.get
@@ -100,30 +104,29 @@ class VcrHttp private (
   override def close(): Unit =
     Try(save()).failed.foreach(_.printStackTrace())
 
-  def send(request: HttpRequest): Future[HttpResponse] = {
-    val vcrRequest = toVcrRequest(request)
-
-    this.findMatch(vcrRequest) match {
-      case Some(VcrRecord(_, response, _)) => Future.successful(toAkkaResponse(response))
-      case None                            =>
-        if (this.recordOptions.shouldRecord(vcrRequest)) {
-          sendRequest(request).flatMap { response =>
-            toVcrResponse(response).map { vcrResponse =>
-              this.newlyRecorded.updateAndGet { records =>
-                records :+ VcrRecord(vcrRequest, vcrResponse, OffsetDateTime.now())
+  def send(request: HttpRequest): Future[HttpResponse] =
+    toVcrRequest(request).flatMap { vcrRequest =>
+      this.findMatch(vcrRequest) match {
+        case Some(VcrRecord(_, response, _)) => Future.successful(toAkkaResponse(response))
+        case None                            =>
+          if (this.recordOptions.shouldRecord(vcrRequest)) {
+            sendRequest(request).flatMap { response =>
+              toVcrResponse(response).map { vcrResponse =>
+                this.newlyRecorded.updateAndGet { records =>
+                  records :+ VcrRecord(vcrRequest, vcrResponse, OffsetDateTime.now())
+                }
+                response
               }
-              response
             }
-          }
-        } else if (this.recordOptions.notRecordedThrowsErrors) {
-          Future.failed(
-            new Exception(
-              s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
+          } else if (this.recordOptions.notRecordedThrowsErrors) {
+            Future.failed(
+              new Exception(
+                s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
+              )
             )
-          )
-        } else {
-          sendRequest(request)
-        }
+          } else {
+            sendRequest(request)
+          }
+      }
     }
-  }
 }
