@@ -36,7 +36,7 @@ lazy val root = project
 lazy val core = module("be-kind-rewind", Some("core"))
   .settings(
     fork := true,
-    baseDirectory in run := file("."),
+    run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit"        % Version.munit % Test,
       "io.circe"      %% "circe-core"   % Version.circe,
@@ -50,7 +50,7 @@ lazy val core = module("be-kind-rewind", Some("core"))
 lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   .settings(
     fork := true,
-    baseDirectory in run := file("."),
+    run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %% "core"  % Version.sttp,
       "com.softwaremill.sttp.client3" %% "circe" % Version.sttp
@@ -61,7 +61,7 @@ lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
 lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("client-play-standalone"))
   .settings(
     fork := true,
-    baseDirectory in run := file("."),
+    run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play-ahc-ws-standalone" % "2.1.3"
     )
@@ -71,7 +71,7 @@ lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("c
 lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
   .settings(
     fork := true,
-    baseDirectory in run := file("."),
+    run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play-ws" % "2.8.7"
     )
@@ -81,7 +81,7 @@ lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
 lazy val clientAkkaHttp = module("be-kind-rewind-akka-http", Some("client-akka-http"))
   .settings(
     fork := true,
-    baseDirectory in run := file("."),
+    run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-http"        % Version.akkaHttp,
       "com.typesafe.akka" %% "akka-stream"      % Version.akka  % Provided,

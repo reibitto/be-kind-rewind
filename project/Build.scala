@@ -1,6 +1,5 @@
+import sbt.Keys._
 import sbt._
-import Keys._
-import scala.Console
 
 object Build {
   val Scala213Version = "2.13.5"
@@ -10,7 +9,7 @@ object Build {
 
   object Version {
     val circe = "0.13.0"
-    val sttp  = "3.2.0"
+    val sttp  = "3.2.3"
     val munit = "0.7.23"
 
     val akka     = "2.6.13"
@@ -46,14 +45,6 @@ object Build {
         "-Ywarn-unused:privates",      // Warn if a private member is unused.
         "-Ywarn-unused:implicits"      // Warn if an implicit parameter is unused.
       ).filter(_ => shouldWarnForUnusedCode)
-      ++ (CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, n)) if n <= 12 =>
-          Seq()
-        case _                       =>
-          Seq(
-            "-Ymacro-annotations"
-          )
-      })
   )
 
   def defaultSettings(projectName: String) =
@@ -93,6 +84,6 @@ object Build {
     flagValue
   }
 
-  lazy val shouldWarnForUnusedCode: Boolean = compilerFlag("scalac.unused.enabled", false)
+  lazy val shouldWarnForUnusedCode: Boolean = compilerFlag("scalac.unused.enabled", default = false)
 
 }
