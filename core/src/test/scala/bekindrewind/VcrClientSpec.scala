@@ -5,6 +5,7 @@ import io.circe.parser._
 import io.circe.syntax._
 
 import java.net.URI
+import java.nio.charset.StandardCharsets
 import java.nio.file._
 import java.time.OffsetDateTime
 
@@ -26,7 +27,7 @@ class VcrClientSpec extends FunSuite {
     assert(client.previouslyRecorded.isEmpty)
     assert(client.newlyRecorded.get().sizeIs == 1)
 
-    val savedJson = Files.readString(recordingPath)
+    val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)
     val decoded   = decode[VcrRecords](savedJson).map(_.records)
     assertEquals(decoded, Right(Vector(record)))
   }
@@ -40,7 +41,7 @@ class VcrClientSpec extends FunSuite {
     val rawJson = VcrRecords(Vector(record), BuildInfo.version).asJson.spaces2
 
     val recordingPath = Files.createTempFile("test", ".json")
-    Files.writeString(recordingPath, rawJson)
+    Files.write(recordingPath, rawJson.getBytes(StandardCharsets.UTF_8))
 
     val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher(_ => true))
     assert(client.newlyRecorded.get().isEmpty)
