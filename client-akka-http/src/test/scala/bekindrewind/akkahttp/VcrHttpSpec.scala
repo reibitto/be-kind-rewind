@@ -48,11 +48,11 @@ class VcrHttpSpec extends FunSuite {
 
       assertEquals(
         res3,
-        HttpResponse(entity = binaryEntity, headers = Seq(RawHeader(VcrClient.vcrCacheHeaderName, "true")))
+        HttpResponse(entity = binaryEntity, headers = Vector(RawHeader(VcrClient.vcrCacheHeaderName, "true")))
       )
       assertEquals(
         res4,
-        HttpResponse(entity = jsonEntity, headers = Seq(RawHeader(VcrClient.vcrCacheHeaderName, "true")))
+        HttpResponse(entity = jsonEntity, headers = Vector(RawHeader(VcrClient.vcrCacheHeaderName, "true")))
       )
 
       assertEquals(counter.get(), 2)

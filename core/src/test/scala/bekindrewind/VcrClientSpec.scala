@@ -8,6 +8,7 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file._
 import java.time.OffsetDateTime
+import scala.collection.compat._
 
 class VcrClientSpec extends FunSuite {
 

@@ -14,6 +14,7 @@ import sttp.monad.syntax._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.time.OffsetDateTime
+import scala.collection.immutable
 import scala.util.Try
 
 class VcrBackend[F[_], P](
@@ -120,10 +121,10 @@ class VcrBackend[F[_], P](
       (k, vs.map(_.value))
     }
 
-  def toSttpHeaders(headers: Map[String, Seq[String]]): Seq[Header] =
+  def toSttpHeaders(headers: Map[String, Seq[String]]): immutable.Seq[Header] =
     headers.flatMap { case (k, vs) =>
       vs.map(v => Header(k, v))
-    }.toSeq
+    }.toVector
 }
 
 object VcrBackend {

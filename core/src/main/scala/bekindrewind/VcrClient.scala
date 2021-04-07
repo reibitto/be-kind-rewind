@@ -4,6 +4,7 @@ import bekindrewind.util.VcrIO
 
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
+import scala.collection.compat._
 
 trait VcrClient {
   def recordingPath: Path
