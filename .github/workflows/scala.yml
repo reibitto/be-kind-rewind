@@ -15,5 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
+      - name: Set up environment
       - uses: olafurpg/setup-scala@v10
-      - run: sbt +testsJVM/test plugin/test
+
+      - name: Run tests
+      - run: sbt -Dscalac.unused.enabled=true fmtCheck test
