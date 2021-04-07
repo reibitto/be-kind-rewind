@@ -49,7 +49,10 @@ object VcrHttp {
     }
 
   private[akkahttp] def showContentType(contentType: ContentType): Option[String] =
-    Option.when(contentType != ContentTypes.NoContentType)(contentType.value)
+    if (contentType == ContentTypes.NoContentType)
+      None
+    else
+      Option(contentType.value)
 
   private[akkahttp] def toAkkaResponse(
     vcrRecordRequest: VcrRecordRequest,
