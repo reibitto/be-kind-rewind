@@ -15,8 +15,6 @@ object Build {
 
     val akka     = "2.6.13"
     val akkaHttp = "10.2.4"
-
-    val scalaCollectionCompat = "2.4.3"
   }
 
   lazy val ScalacOptions = Def.setting(

@@ -38,10 +38,9 @@ lazy val core = module("be-kind-rewind", Some("core"))
     fork := true,
     baseDirectory in run := file("."),
     libraryDependencies ++= Seq(
-      "org.scala-lang.modules" %% "scala-collection-compat" % Version.scalaCollectionCompat,
-      "org.scalameta"          %% "munit"                   % Version.munit % Test,
-      "io.circe"               %% "circe-core"              % Version.circe,
-      "io.circe"               %% "circe-parser"            % Version.circe
+      "org.scalameta" %% "munit"        % Version.munit % Test,
+      "io.circe"      %% "circe-core"   % Version.circe,
+      "io.circe"      %% "circe-parser" % Version.circe
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "bekindrewind"

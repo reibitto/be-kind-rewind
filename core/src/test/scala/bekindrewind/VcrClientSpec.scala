@@ -8,7 +8,6 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file._
 import java.time.OffsetDateTime
-import scala.collection.compat._
 
 class VcrClientSpec extends FunSuite {
 
@@ -26,7 +25,7 @@ class VcrClientSpec extends FunSuite {
     client.newlyRecorded.set(Vector(record))
     client.save()
     assert(client.previouslyRecorded.isEmpty)
-    assert(client.newlyRecorded.get().sizeIs == 1)
+    assertEquals(client.newlyRecorded.get().size, 1)
 
     val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)
     val decoded   = decode[VcrRecords](savedJson).map(_.records)

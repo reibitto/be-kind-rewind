@@ -15,7 +15,6 @@ import java.nio.file.Path
 import java.time.OffsetDateTime
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.collection.immutable
-import scala.collection.compat._
 import scala.util.Try
 
 object VcrHttp {
@@ -91,9 +90,10 @@ object VcrHttp {
       )
     }
 
-  private[akkahttp] def toVcrHeaders(headers: Seq[HttpHeader]): Map[String, Seq[String]] =
-    headers.groupBy(header => header.name()).view.mapValues(_.map(_.value())).toMap
-
+  private[akkahttp] def toVcrHeaders(headers: Seq[HttpHeader]): Map[String, Seq[String]]            =
+    headers.groupBy(header => header.name()).map { case (name, headers) =>
+      name -> headers.map(_.value())
+    }
   private[akkahttp] def toAkkaHeaders(headers: Map[String, Seq[String]]): immutable.Seq[HttpHeader] =
     (for {
       (key, group) <- headers.iterator

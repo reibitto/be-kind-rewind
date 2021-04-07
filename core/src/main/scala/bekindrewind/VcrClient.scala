@@ -4,7 +4,6 @@ import bekindrewind.util.VcrIO
 
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
-import scala.collection.compat._
 
 trait VcrClient {
   def recordingPath: Path
@@ -21,7 +20,9 @@ trait VcrClient {
 
         case Right(records) =>
           println(s"Loaded ${records.records.length} records")
-          records.records.groupBy(rec => matcher.groupFn(rec.request)).view.mapValues(StatefulVcrRecords.create).toMap
+          records.records.groupBy(rec => matcher.groupFn(rec.request)).map { case (anyKey, records) =>
+            anyKey -> StatefulVcrRecords.create(records)
+          }
       }
     }
 
