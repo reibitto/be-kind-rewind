@@ -3,7 +3,8 @@ import Keys._
 import scala.Console
 
 object Build {
-  val ScalaVersion = "2.13.5"
+  val Scala213Version = "2.13.5"
+  val Scala212Version = "2.12.13"
 
   val BeKindRewindVersion = "0.1.0"
 
@@ -16,42 +17,52 @@ object Build {
     val akkaHttp = "10.2.4"
   }
 
-  lazy val ScalacOptions = Seq(
-    "-encoding",
-    "UTF-8",
-    "-unchecked",
-    "-deprecation",
-    "-feature",
-    "-language:postfixOps",
-    "-language:implicitConversions",
-    "-language:higherKinds",
-    "-Xfatal-warnings",
-    "-Ymacro-annotations",
-    "-Xlint:nullary-unit",           // Warn when nullary methods return Unit.
-    "-Xlint:inaccessible",           // Warn about inaccessible types in method signatures.
-    "-Xlint:missing-interpolator",   // A string literal appears to be missing an interpolator id.
-    "-Xlint:doc-detached",           // A Scaladoc comment appears to be detached from its element.
-    "-Xlint:private-shadow",         // A private field (or class parameter) shadows a superclass field.
-    "-Xlint:type-parameter-shadow",  // A local type parameter shadows a type already in scope.
-    "-Xlint:delayedinit-select",     // Selecting member of DelayedInit.
-    "-Xlint:stars-align",            // Pattern sequence wildcard must align with sequence component.
-    "-Xlint:option-implicit",        // Option.apply used implicit view.
-    "-Xlint:poly-implicit-overload", // Parameterized overloaded implicit methods are not visible as view bounds.
-    "-Ywarn-extra-implicit"          // Warn when more than one implicit parameter section is defined.
-  ) ++
+  lazy val ScalacOptions = Def.setting(
     Seq(
-      "-Ywarn-unused:imports",       // Warn if an import selector is not referenced.
-      "-Ywarn-unused:locals",        // Warn if a local definition is unused.
-      "-Ywarn-unused:privates",      // Warn if a private member is unused.
-      "-Ywarn-unused:implicits"      // Warn if an implicit parameter is unused.
-    ).filter(_ => shouldWarnForUnusedCode)
+      "-encoding",
+      "UTF-8",
+      "-unchecked",
+      "-deprecation",
+      "-feature",
+      "-language:postfixOps",
+      "-language:implicitConversions",
+      "-language:higherKinds",
+      "-Xfatal-warnings",
+      "-Xlint:nullary-unit",           // Warn when nullary methods return Unit.
+      "-Xlint:inaccessible",           // Warn about inaccessible types in method signatures.
+      "-Xlint:missing-interpolator",   // A string literal appears to be missing an interpolator id.
+      "-Xlint:doc-detached",           // A Scaladoc comment appears to be detached from its element.
+      "-Xlint:private-shadow",         // A private field (or class parameter) shadows a superclass field.
+      "-Xlint:type-parameter-shadow",  // A local type parameter shadows a type already in scope.
+      "-Xlint:delayedinit-select",     // Selecting member of DelayedInit.
+      "-Xlint:stars-align",            // Pattern sequence wildcard must align with sequence component.
+      "-Xlint:option-implicit",        // Option.apply used implicit view.
+      "-Xlint:poly-implicit-overload", // Parameterized overloaded implicit methods are not visible as view bounds.
+      "-Ywarn-extra-implicit"          // Warn when more than one implicit parameter section is defined.
+    ) ++
+      Seq(
+        "-Ywarn-unused:imports",       // Warn if an import selector is not referenced.
+        "-Ywarn-unused:locals",        // Warn if a local definition is unused.
+        "-Ywarn-unused:privates",      // Warn if a private member is unused.
+        "-Ywarn-unused:implicits"      // Warn if an implicit parameter is unused.
+      ).filter(_ => shouldWarnForUnusedCode)
+      ++ (CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((2, n)) if n <= 12 =>
+          Seq()
+        case _                       =>
+          Seq(
+            "-Ymacro-annotations"
+          )
+      })
+  )
 
   def defaultSettings(projectName: String) =
     Seq(
       name := projectName,
       javaOptions in Test += "-Duser.timezone=UTC",
-      scalacOptions := ScalacOptions,
-      scalaVersion in ThisBuild := ScalaVersion,
+      scalacOptions := ScalacOptions.value,
+      scalaVersion in ThisBuild := Scala213Version,
+      crossScalaVersions in ThisBuild := Seq(Scala213Version, Scala212Version),
       libraryDependencies ++= Plugins.BaseCompilerPlugins,
       incOptions ~= (_.withLogRecompileOnMacro(false)),
       autoAPIMappings := true,

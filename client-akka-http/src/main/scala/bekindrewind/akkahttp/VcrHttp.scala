@@ -14,6 +14,7 @@ import java.net.URI
 import java.nio.file.Path
 import java.time.OffsetDateTime
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.collection.immutable
 import scala.util.Try
 
 object VcrHttp {
@@ -49,7 +50,10 @@ object VcrHttp {
     }
 
   private[akkahttp] def showContentType(contentType: ContentType): Option[String] =
-    Option.when(contentType != ContentTypes.NoContentType)(contentType.value)
+    if (contentType == ContentTypes.NoContentType)
+      None
+    else
+      Option(contentType.value)
 
   private[akkahttp] def toAkkaResponse(
     vcrRecordRequest: VcrRecordRequest,
@@ -86,16 +90,17 @@ object VcrHttp {
       )
     }
 
-  private[akkahttp] def toVcrHeaders(headers: Seq[HttpHeader]): Map[String, Seq[String]] =
-    headers.groupBy(header => header.name()).view.mapValues(_.map(_.value())).toMap
-
-  private[akkahttp] def toAkkaHeaders(headers: Map[String, Seq[String]]): Seq[HttpHeader] =
+  private[akkahttp] def toVcrHeaders(headers: Seq[HttpHeader]): Map[String, Seq[String]]            =
+    headers.groupBy(header => header.name()).map { case (name, headers) =>
+      name -> headers.map(_.value())
+    }
+  private[akkahttp] def toAkkaHeaders(headers: Map[String, Seq[String]]): immutable.Seq[HttpHeader] =
     (for {
       (key, group) <- headers.iterator
       value        <- group.iterator
     } yield HttpHeader.parse(key, value)).collect { case HttpHeader.ParsingResult.Ok(header, _) =>
       header
-    }.toSeq
+    }.toVector
 }
 
 // Akka Http does not have "Client" concept.
