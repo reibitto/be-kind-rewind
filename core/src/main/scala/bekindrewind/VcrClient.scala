@@ -32,7 +32,11 @@ trait VcrClient {
 
   def addNewRecord(recordRequest: VcrRecord): Unit =
     newlyRecorded.updateAndGet { records =>
-      records :+ recordRequest
+      val transformed = recordRequest.copy(
+        request = recordOptions.requestTransformer(recordRequest.request),
+        response = recordOptions.responseTransformer(recordRequest.response)
+      )
+      records :+ transformed
     }
 
   def currentNewlyRecorded(): immutable.Seq[VcrRecord] = newlyRecorded.get()

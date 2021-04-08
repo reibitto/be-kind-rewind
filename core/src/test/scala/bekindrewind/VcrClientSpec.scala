@@ -32,6 +32,37 @@ class VcrClientSpec extends FunSuite {
     assertEquals(decoded, Right(Vector(record)))
   }
 
+  test("Request and response can be transformed") {
+    val recordingPath = Files.createTempFile("test", ".json")
+    val client        = MockClient(
+      recordingPath,
+      RecordOptions.default.copy(
+        requestTransformer = req => req.copy(uri = new URI("https://example.com/SAFE")),
+        responseTransformer = res => res.copy(headers = res.headers.removed("SENSITIVE_DATA"))
+      ),
+      VcrMatcher(_ => true)
+    )
+
+    val original = VcrRecord(
+      VcrRecordRequest("GET", new URI("https://example.com/DANGER"), "{}", Map.empty, "HTTP/1.1"),
+      VcrRecordResponse(200, "ok", Map("SENSITIVE_DATA" -> Seq("DO_NOT_RECORD_ME")), "{}", Some("text/json")),
+      OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
+    )
+    client.addNewRecord(original)
+
+    val expected = VcrRecord(
+      VcrRecordRequest("GET", new URI("https://example.com/SAFE"), "{}", Map.empty, "HTTP/1.1"),
+      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
+      OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
+    )
+    assertEquals(client.currentNewlyRecorded(), Seq(expected))
+
+    client.save()
+    val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)
+    val decoded   = decode[VcrRecords](savedJson).map(_.records)
+    assertEquals(decoded, Right(Vector(expected)))
+  }
+
   test("Client loads the previous record when being constructed") {
     val record  = VcrRecord(
       VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
