@@ -79,9 +79,7 @@ class VcrBackend[F[_], P](
                              ),
                              OffsetDateTime.now
                            )
-            _            = newlyRecorded.updateAndGet { records =>
-                             records :+ record
-                           }
+            _            = this.addNewRecord(record)
           } yield response.copy(body = response.body._1)
         } else if (recordOptions.notRecordedThrowsErrors) {
           underlying.responseMonad.error(

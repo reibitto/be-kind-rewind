@@ -4,6 +4,7 @@ import bekindrewind.util.VcrIO
 
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
+import scala.collection.immutable
 
 trait VcrClient {
   def recordingPath: Path
@@ -29,7 +30,14 @@ trait VcrClient {
     records
   }
 
-  val newlyRecorded: AtomicReference[Vector[VcrRecord]] =
+  def addNewRecord(recordRequest: VcrRecord): Unit =
+    newlyRecorded.updateAndGet { records =>
+      records :+ recordRequest
+    }
+
+  def currentNewlyRecorded(): immutable.Seq[VcrRecord] = newlyRecorded.get()
+
+  private val newlyRecorded: AtomicReference[Vector[VcrRecord]] =
     new AtomicReference(Vector.empty)
 
   def findMatch[T, R](recordRequest: VcrRecordRequest): Option[VcrRecord] =
