@@ -116,8 +116,6 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
         implicit val mat: Materializer            = owner.materializer
 
         if (owner.matcher.shouldRecord(vcrRequest)) {
-          println(s"Performing actual HTTP request: ${req.method} ${req.uri}")
-
           for {
             requestBody <- req.body match {
                              case EmptyBody          => Future.successful("")

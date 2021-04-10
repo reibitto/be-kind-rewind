@@ -55,8 +55,6 @@ class VcrBackend[F[_], P](
 
       case None =>
         if (matcher.shouldRecord(vcrRequest)) {
-          println(s"Performing actual HTTP request: ${request.method} ${request.uri}")
-
           implicit val monadError: MonadError[F] = underlyingBackend.responseMonad
 
           for {

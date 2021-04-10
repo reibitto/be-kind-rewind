@@ -20,7 +20,6 @@ trait VcrClient {
           Map.empty[VcrKey, StatefulVcrEntries]
 
         case Right(entries) =>
-          println(s"Loaded ${entries.entries.length} entries")
           entries.entries.groupBy(rec => matcher.group(rec.request)).map { case (anyKey, entries) =>
             anyKey -> StatefulVcrEntries.create(entries)
           }
@@ -50,8 +49,6 @@ trait VcrClient {
     val previousEntries = previouslyRecorded.values.flatMap(_.entries).toVector.sortBy(_.recordedAt)
     val newEntries      = newlyRecordedRef.get
     val allEntries      = previousEntries ++ newEntries
-
-    println(s"Writing ${allEntries.size} entries to ${recordingPath.toAbsolutePath}")
 
     VcrIO.write(
       recordingPath,
