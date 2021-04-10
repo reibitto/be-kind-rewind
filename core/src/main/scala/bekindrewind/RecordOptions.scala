@@ -4,8 +4,7 @@ final case class RecordOptions(
   shouldRecord: VcrRecordRequest => Boolean,
   notRecordedThrowsErrors: Boolean,
   overwriteAll: Boolean,
-  requestTransformer: RequestTransformer,
-  responseTransformer: ResponseTransformer
+  recordTransformer: RecordTransformer
 ) {
   def shouldRecord(shouldRecord: VcrRecordRequest => Boolean): RecordOptions =
     copy(shouldRecord = shouldRecord)
@@ -22,15 +21,17 @@ object RecordOptions {
     _ => true,
     notRecordedThrowsErrors = false,
     overwriteAll = false,
-    requestTransformer = RequestTransformer.noop,
-    responseTransformer = ResponseTransformer.noop
+    recordTransformer = identity
   )
 
   val off: RecordOptions = RecordOptions(
     _ => false,
     notRecordedThrowsErrors = false,
     overwriteAll = false,
-    requestTransformer = RequestTransformer.noop,
-    responseTransformer = ResponseTransformer.noop
+    recordTransformer = identity
   )
+}
+
+trait RecordTransformer {
+  def apply(request: VcrRecord): VcrRecord
 }

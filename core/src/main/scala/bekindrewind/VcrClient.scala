@@ -32,10 +32,7 @@ trait VcrClient {
 
   def addNewRecord(recordRequest: VcrRecord): Unit =
     newlyRecorded.updateAndGet { records =>
-      val transformed = recordRequest.copy(
-        request = recordOptions.requestTransformer(recordRequest.request),
-        response = recordOptions.responseTransformer(recordRequest.response)
-      )
+      val transformed = recordOptions.recordTransformer(recordRequest)
       records :+ transformed
     }
 

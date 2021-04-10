@@ -36,10 +36,12 @@ class VcrClientSpec extends FunSuite {
     val recordingPath = Files.createTempFile("test", ".json")
     val client        = MockClient(
       recordingPath,
-      RecordOptions.default.copy(
-        requestTransformer = req => req.copy(uri = new URI("https://example.com/SAFE")),
-        responseTransformer = res => res.copy(headers = res.headers.removed("SENSITIVE_DATA"))
-      ),
+      RecordOptions.default.copy(recordTransformer = { case record @ VcrRecord(req, res, _) =>
+        record.copy(
+          request = req.copy(uri = new URI("https://example.com/SAFE")),
+          response = res.copy(headers = res.headers.removed("SENSITIVE_DATA"))
+        )
+      }),
       VcrMatcher(_ => true)
     )
 
