@@ -144,9 +144,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
                                OffsetDateTime.now
                              )
 
-                             owner.newlyRecorded.updateAndGet { records =>
-                               records :+ record
-                             }
+                             owner.addNewRecord(record)
 
                              res
                            }
