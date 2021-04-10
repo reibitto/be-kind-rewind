@@ -95,7 +95,7 @@ class VcrClientSpec extends FunSuite {
       RecordOptions.default.copy(
         expiresAfter = Some(90 days)
       ),
-      VcrMatcher(_ => true)
+      VcrMatcher.identity
     )
     assert(client.previouslyRecorded.isEmpty)
     assert(client.newlyRecorded().isEmpty)
@@ -129,9 +129,9 @@ class VcrClientSpec extends FunSuite {
     val recordingPath = Files.createTempFile("test", ".json")
     Files.write(recordingPath, rawJson.getBytes(StandardCharsets.UTF_8))
 
-    val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher(_ => true))
+    val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher.groupBy(_ => "bucket"))
     assert(client.newlyRecorded().isEmpty)
-    assertEquals(client.previouslyRecorded.get(true), None)
+    assertEquals(client.previouslyRecorded.get(VcrKey("bucket")), None)
   }
 }
 
