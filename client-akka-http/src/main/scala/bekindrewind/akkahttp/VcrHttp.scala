@@ -22,14 +22,14 @@ object VcrHttp {
     sendRequest: HttpRequest => Future[HttpResponse],
     recordingPath: Path,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
   )(implicit executionContext: ExecutionContext, materializer: Materializer): VcrHttp =
     new VcrHttp(sendRequest, recordingPath, recordOptions, matcher)
 
   def useClassicActorSystem(
     recordingPath: Path,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri)),
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri)),
     executionContext: Option[ExecutionContext] = None
   )(implicit system: ClassicActorSystemProvider): VcrHttp = {
     implicit val ec = executionContext.getOrElse(system.classicSystem.dispatcher)
@@ -122,7 +122,7 @@ class VcrHttp private (
       this.findMatch(vcrRequest) match {
         case Some(VcrRecord(_, response, _)) => Future.successful(toAkkaResponse(vcrRequest, response))
         case None                            =>
-          if (this.recordOptions.shouldRecord(vcrRequest)) {
+          if (this.matcher.shouldRecord(vcrRequest)) {
             sendRequest(request).flatMap { response =>
               toVcrResponse(response).map { vcrResponse =>
                 this.addNewRecord(VcrRecord(vcrRequest, vcrResponse, OffsetDateTime.now()))

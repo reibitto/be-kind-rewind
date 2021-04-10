@@ -1,8 +1,8 @@
 package bekindrewind
 
-import munit._
 import io.circe.parser._
 import io.circe.syntax._
+import munit._
 
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -13,7 +13,7 @@ class VcrClientSpec extends FunSuite {
 
   test("Request and response are saved as JSON") {
     val recordingPath = Files.createTempFile("test", ".json")
-    val client        = MockClient(recordingPath, RecordOptions.default, VcrMatcher(_ => true))
+    val client        = MockClient(recordingPath, RecordOptions.default, VcrMatcher.default)
     assert(client.previouslyRecorded.isEmpty)
     assert(client.newlyRecorded().isEmpty)
 
@@ -36,13 +36,13 @@ class VcrClientSpec extends FunSuite {
     val recordingPath = Files.createTempFile("test", ".json")
     val client        = MockClient(
       recordingPath,
-      RecordOptions.default.copy(recordTransformer = { case record @ VcrRecord(req, res, _) =>
+      RecordOptions.default,
+      VcrMatcher.identity.withTransformer { case record @ VcrRecord(req, res, _) =>
         record.copy(
           request = req.copy(uri = new URI("https://example.com/SAFE")),
           response = res.copy(headers = res.headers.removed("SENSITIVE_DATA"))
         )
-      }),
-      VcrMatcher(_ => true)
+      }
     )
 
     val original = VcrRecord(
@@ -76,9 +76,10 @@ class VcrClientSpec extends FunSuite {
     val recordingPath = Files.createTempFile("test", ".json")
     Files.write(recordingPath, rawJson.getBytes(StandardCharsets.UTF_8))
 
-    val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher(_ => true))
+    val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher.groupBy(_ => "bucket"))
     assert(client.newlyRecorded().isEmpty)
-    client.previouslyRecorded.get(true) match {
+
+    client.previouslyRecorded.get(VcrKey("bucket")) match {
       case None           => fail("Should load the record !!")
       case Some(previous) =>
         assertEquals(previous.records, Vector(record))
@@ -88,4 +89,4 @@ class VcrClientSpec extends FunSuite {
 
 }
 
-case class MockClient(recordingPath: Path, recordOptions: RecordOptions, matcher: VcrMatcher) extends VcrClient
+final case class MockClient(recordingPath: Path, recordOptions: RecordOptions, matcher: VcrMatcher) extends VcrClient

@@ -13,7 +13,7 @@ import scala.concurrent.Future
 
 class VcrHttpSpec extends FunSuite {
   test("Save and load") {
-    implicit val system = ActorSystem.create()
+    implicit val system: ActorSystem = ActorSystem.create()
 
     val counter = new AtomicInteger(0)
 
@@ -31,7 +31,7 @@ class VcrHttpSpec extends FunSuite {
       stubSendRequest,
       recordingPath,
       RecordOptions.default.overwriteAll(true),
-      matcher = VcrMatcher(identity)
+      matcher = VcrMatcher.identity
     )
     val req1          = HttpRequest(HttpMethods.POST, Uri("/files/new"), entity = HttpEntity(Array[Byte](1, 2, 3)))
     val req2          = HttpRequest(HttpMethods.PUT, Uri("/messages/1"), entity = HttpEntity("hello"))
@@ -39,7 +39,7 @@ class VcrHttpSpec extends FunSuite {
       res1          <- vcrClient.send(req1)
       res2          <- vcrClient.send(req2)
       _              = vcrClient.close()
-      recordedClient = VcrHttp.create(stubSendRequest, recordingPath, matcher = VcrMatcher(identity))
+      recordedClient = VcrHttp.create(stubSendRequest, recordingPath, matcher = VcrMatcher.identity)
       res3          <- recordedClient.send(req1)
       res4          <- recordedClient.send(req2)
     } yield {
