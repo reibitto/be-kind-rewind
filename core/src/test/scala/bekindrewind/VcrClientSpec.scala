@@ -37,7 +37,7 @@ class VcrClientSpec extends FunSuite {
     val client        = MockClient(
       recordingPath,
       RecordOptions.default,
-      VcrMatcher.identity.recordTransformer { case record @ VcrRecord(req, res, _) =>
+      VcrMatcher.identity.withTransformer { case record @ VcrRecord(req, res, _) =>
         record.copy(
           request = req.copy(uri = new URI("https://example.com/SAFE")),
           response = res.copy(headers = res.headers.removed("SENSITIVE_DATA"))

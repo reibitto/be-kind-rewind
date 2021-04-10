@@ -2,22 +2,6 @@ package bekindrewind
 
 sealed trait VcrMatcher {
 
-  def matcherFor(request: VcrRecordRequest): Option[VcrMatcher]
-
-  /**
-   * Returns a VcrKey which is used to group/bucket requests that are considered equivalent (based on the specified
-   * "groupBy" function.
-   */
-  def group(request: VcrRecordRequest): VcrKey
-
-  /** Returns whether the specified request will be recorded by this matcher or not. */
-  def shouldRecord(request: VcrRecordRequest): Boolean = matcherFor(request).isDefined
-
-  /**
-   * Applies the specified predicate to determine whether the request should be recorded or not.
-   */
-  def filter(pred: VcrRecordRequest => Boolean): VcrMatcher
-
   /**
    * Appends another VcrMatcher to this VcrMatcher. The specified VcrMatcher is attached to the end, meaning if the
    * 1st VcrMatcher matches the request, the 2nd one
@@ -27,9 +11,27 @@ sealed trait VcrMatcher {
   /** Alias for [[append]] */
   def :+(other: VcrMatcher): VcrMatcher = append(other)
 
-  def transformRecord(record: VcrRecord): VcrRecord
+  /**
+   * Returns a VcrKey which is used to group/bucket requests that are considered equivalent (based on the specified
+   * "groupBy" function.
+   */
+  def group(request: VcrRecordRequest): VcrKey
 
-  def recordTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher
+  def matcherFor(request: VcrRecordRequest): Option[VcrMatcher]
+
+  /** Returns whether the specified request will be recorded by this matcher or not. */
+  def shouldRecord(request: VcrRecordRequest): Boolean = matcherFor(request).isDefined
+
+  def transform(record: VcrRecord): VcrRecord
+
+  def withGrouper(grouper: VcrRecordRequest => VcrKey): VcrMatcher
+
+  /**
+   * Applies the specified predicate to determine whether the request should be recorded or not.
+   */
+  def withShouldRecord(pred: VcrRecordRequest => Boolean): VcrMatcher
+
+  def withTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher
 }
 
 object VcrMatcher {
@@ -40,31 +42,33 @@ object VcrMatcher {
     VcrMatcher.One(req => VcrKey.Grouped(groupFn(req)), _ => true, r => r)
 
   final case class One(
-    groupFn: VcrRecordRequest => VcrKey,
-    shouldRecordFn: VcrRecordRequest => Boolean,
-    recordTransformer: VcrRecord => VcrRecord
+    grouper: VcrRecordRequest => VcrKey,
+    shouldRecordPredicate: VcrRecordRequest => Boolean,
+    transformer: VcrRecord => VcrRecord
   ) extends VcrMatcher {
     override def group(request: VcrRecordRequest): VcrKey =
       if (shouldRecord(request))
-        groupFn(request)
+        grouper(request)
       else
         VcrKey.Ungrouped
 
     override def matcherFor(request: VcrRecordRequest): Option[VcrMatcher] =
-      if (shouldRecordFn(request)) Some(this) else None
+      if (shouldRecordPredicate(request)) Some(this) else None
 
-    override def filter(pred: VcrRecordRequest => Boolean): VcrMatcher =
-      copy(shouldRecordFn = r => shouldRecordFn(r) && pred(r))
+    override def withShouldRecord(pred: VcrRecordRequest => Boolean): VcrMatcher =
+      copy(shouldRecordPredicate = r => shouldRecordPredicate(r) && pred(r))
 
     override def append(other: VcrMatcher): VcrMatcher = other match {
       case m: VcrMatcher.One   => VcrMatcher.Many(Vector(this, m))
       case VcrMatcher.Many(ms) => VcrMatcher.Many(this +: ms)
     }
 
-    override def recordTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher =
-      copy(recordTransformer = transformer)
+    override def withTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher =
+      copy(transformer = transformer)
 
-    override def transformRecord(record: VcrRecord): VcrRecord = recordTransformer(record)
+    override def transform(record: VcrRecord): VcrRecord = transformer(record)
+
+    override def withGrouper(grouper: VcrRecordRequest => VcrKey): VcrMatcher = copy(grouper = grouper)
   }
 
   final case class Many(matchers: Vector[VcrMatcher.One]) extends VcrMatcher {
@@ -72,14 +76,12 @@ object VcrMatcher {
       matcherFor(request).map(_.group(request)).getOrElse(VcrKey.Ungrouped)
 
     override def matcherFor(request: VcrRecordRequest): Option[VcrMatcher] =
-      matchers.find(_.shouldRecordFn(request))
+      matchers.find(_.shouldRecordPredicate(request))
 
-    override def filter(pred: VcrRecordRequest => Boolean): VcrMatcher =
+    override def withShouldRecord(pred: VcrRecordRequest => Boolean): VcrMatcher =
       VcrMatcher.Many(
         matchers.map { matcher =>
-          matcher.copy(shouldRecordFn = { req =>
-            matcher.shouldRecordFn(req) && pred(req)
-          })
+          matcher.copy(shouldRecordPredicate = pred)
         }
       )
 
@@ -88,15 +90,20 @@ object VcrMatcher {
       case VcrMatcher.Many(matchers) => VcrMatcher.Many(this.matchers ++ matchers)
     }
 
-    override def transformRecord(record: VcrRecord): VcrRecord =
-      matcherFor(record.request).map(_.transformRecord(record)).getOrElse(record)
+    override def transform(record: VcrRecord): VcrRecord =
+      matcherFor(record.request).map(_.transform(record)).getOrElse(record)
 
-    override def recordTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher =
+    override def withTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher =
       VcrMatcher.Many(
         matchers.map { matcher =>
-          matcher.copy(recordTransformer = { rec =>
-            transformer(matcher.recordTransformer(rec))
-          })
+          matcher.copy(transformer = transformer)
+        }
+      )
+
+    override def withGrouper(grouper: VcrRecordRequest => VcrKey): VcrMatcher =
+      VcrMatcher.Many(
+        matchers.map { matcher =>
+          matcher.copy(grouper = grouper)
         }
       )
   }

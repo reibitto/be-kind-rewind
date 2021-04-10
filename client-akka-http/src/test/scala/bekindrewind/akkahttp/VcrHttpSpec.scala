@@ -13,7 +13,7 @@ import scala.concurrent.Future
 
 class VcrHttpSpec extends FunSuite {
   test("Save and load") {
-    implicit val system = ActorSystem.create()
+    implicit val system: ActorSystem = ActorSystem.create()
 
     val counter = new AtomicInteger(0)
 

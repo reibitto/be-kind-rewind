@@ -15,7 +15,7 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   }
 
   test("VcrMatcher#filter") {
-    val matcher = VcrMatcher.identity.filter(_.method == "GET")
+    val matcher = VcrMatcher.identity.withShouldRecord(_.method == "GET")
 
     assert(matcher.shouldRecord(VcrRecordRequest("GET", new URI("https://example.com"), "", Map.empty, "HTTP/1.1")))
     assert(!matcher.shouldRecord(VcrRecordRequest("POST", new URI("https://example.com"), "", Map.empty, "HTTP/1.1")))
@@ -24,8 +24,8 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   test("VcrMatcher#filter (append)") {
     val uriA     = new URI("https://a.com")
     val uriB     = new URI("https://b.com")
-    val matcher  = VcrMatcher.default.filter(_.uri == uriA)
-    val matcher2 = VcrMatcher.default.filter(_.uri == uriB)
+    val matcher  = VcrMatcher.default.withShouldRecord(_.uri == uriA)
+    val matcher2 = VcrMatcher.default.withShouldRecord(_.uri == uriB)
 
     val combinedMatcher = matcher.append(matcher2)
 
