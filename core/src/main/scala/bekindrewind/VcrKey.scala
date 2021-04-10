@@ -10,8 +10,8 @@ sealed trait VcrKey {
 }
 
 object VcrKey {
-  def apply(x: Any): VcrKey.Grouped =
-    VcrKey.Grouped(x)
+  def apply(key: Any): VcrKey.Grouped =
+    VcrKey.Grouped(key)
 
   final case class Grouped(key: Any) extends VcrKey {
     override def areSameGroupedKey(other: VcrKey): Boolean = other match {

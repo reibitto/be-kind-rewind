@@ -1,6 +1,6 @@
 package bekindrewind.util
 
-import bekindrewind.VcrRecords
+import bekindrewind.VcrEntries
 import io.circe.syntax._
 
 import java.nio.charset.StandardCharsets
@@ -8,19 +8,19 @@ import java.nio.file.{ Files, Path }
 import scala.util.Try
 
 object VcrIO {
-  def read(path: Path): Either[Throwable, VcrRecords] =
+  def read(path: Path): Either[Throwable, VcrEntries] =
     for {
       text    <- Try(new String(Files.readAllBytes(path), StandardCharsets.UTF_8)).toEither
       json    <- io.circe.parser.parse(text)
-      records <- json.as[VcrRecords]
-    } yield records
+      entries <- json.as[VcrEntries]
+    } yield entries
 
-  def write(path: Path, records: VcrRecords): Unit = {
+  def write(path: Path, entries: VcrEntries): Unit = {
     // Ensure directory exists
     Option(path.getParent).foreach { directory =>
       Files.createDirectories(directory)
     }
 
-    Files.write(path, records.asJson.spaces2.getBytes(StandardCharsets.UTF_8))
+    Files.write(path, entries.asJson.spaces2.getBytes(StandardCharsets.UTF_8))
   }
 }

@@ -1,6 +1,6 @@
 package bekindrewind.util
 
-import bekindrewind.VcrRecordRequest
+import bekindrewind.VcrRequest
 import org.scalacheck.Gen
 
 import java.net.URI
@@ -55,11 +55,11 @@ object Generators {
       "Warning"
     )
 
-  val vcrRecordRequest: Gen[VcrRecordRequest] = {
+  val vcrRequest: Gen[VcrRequest] = {
     for {
       method <- method
       uri    <- uri
       body   <- Gen.asciiStr
-    } yield VcrRecordRequest(method, uri, body, Map.empty, "HTTP/1.1")
+    } yield VcrRequest(method, uri, body, Map.empty, "HTTP/1.1")
   }
 }

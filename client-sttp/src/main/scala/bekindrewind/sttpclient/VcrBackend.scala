@@ -26,7 +26,7 @@ class VcrBackend[F[_], P](
     with VcrClient {
 
   override def send[T, R >: P with capabilities.Effect[F]](request: Request[T, R]): F[Response[T]] = {
-    val recordRequest = VcrRecordRequest(
+    val vcrRequest = VcrRequest(
       request.method.method,
       request.uri.toJavaUri,
       requestBodyToString(request.body),
@@ -34,7 +34,7 @@ class VcrBackend[F[_], P](
       "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
     )
 
-    findMatch(recordRequest) match {
+    findMatch(vcrRequest) match {
       case Some(r) =>
         val meta = ResponseMetadata(
           StatusCode(r.response.statusCode),
@@ -54,7 +54,7 @@ class VcrBackend[F[_], P](
         )
 
       case None =>
-        if (matcher.shouldRecord(recordRequest)) {
+        if (matcher.shouldRecord(vcrRequest)) {
           println(s"Performing actual HTTP request: ${request.method} ${request.uri}")
 
           implicit val monadError: MonadError[F] = underlyingBackend.responseMonad
@@ -62,15 +62,15 @@ class VcrBackend[F[_], P](
           for {
             response    <- request.response(asBothOption(request.response, asStringAlways)).send(underlyingBackend)
             bodyAsString = response.body._2.getOrElse("")
-            record       = VcrRecord(
-                             VcrRecordRequest(
+            record       = VcrEntry(
+                             VcrRequest(
                                request.method.method,
                                request.uri.toJavaUri,
                                requestBodyToString(request.body),
                                toPlainHeaders(request.headers),
                                "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
                              ),
-                             VcrRecordResponse(
+                             VcrResponse(
                                response.code.code,
                                response.statusText,
                                toPlainHeaders(response.headers),
@@ -79,12 +79,12 @@ class VcrBackend[F[_], P](
                              ),
                              OffsetDateTime.now
                            )
-            _            = this.addNewRecord(record)
+            _            = this.addNewEntry(record)
           } yield response.copy(body = response.body._1)
         } else if (recordOptions.notRecordedThrowsErrors) {
           underlyingBackend.responseMonad.error(
             new Exception(
-              s"Recording is disabled for `${recordRequest.method} ${recordRequest.uri}`. The HTTP request was not executed."
+              s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
             )
           )
         } else {

@@ -17,18 +17,18 @@ class VcrClientSpec extends FunSuite {
     assert(client.previouslyRecorded.isEmpty)
     assert(client.newlyRecorded().isEmpty)
 
-    val record = VcrRecord(
-      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
-      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
+    val record = VcrEntry(
+      VcrRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
+      VcrResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
-    client.addNewRecord(record)
+    client.addNewEntry(record)
     client.save()
     assert(client.previouslyRecorded.isEmpty)
     assertEquals(client.newlyRecorded().size, 1)
 
     val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)
-    val decoded   = decode[VcrRecords](savedJson).map(_.records)
+    val decoded   = decode[VcrEntries](savedJson).map(_.entries)
     assertEquals(decoded, Right(Vector(record)))
   }
 
@@ -37,7 +37,7 @@ class VcrClientSpec extends FunSuite {
     val client        = MockClient(
       recordingPath,
       RecordOptions.default,
-      VcrMatcher.identity.withTransformer { case record @ VcrRecord(req, res, _) =>
+      VcrMatcher.identity.withTransformer { case record @ VcrEntry(req, res, _) =>
         record.copy(
           request = req.copy(uri = new URI("https://example.com/SAFE")),
           response = res.copy(headers = res.headers.removed("SENSITIVE_DATA"))
@@ -45,33 +45,33 @@ class VcrClientSpec extends FunSuite {
       }
     )
 
-    val original = VcrRecord(
-      VcrRecordRequest("GET", new URI("https://example.com/DANGER"), "{}", Map.empty, "HTTP/1.1"),
-      VcrRecordResponse(200, "ok", Map("SENSITIVE_DATA" -> Seq("DO_NOT_RECORD_ME")), "{}", Some("text/json")),
+    val original = VcrEntry(
+      VcrRequest("GET", new URI("https://example.com/DANGER"), "{}", Map.empty, "HTTP/1.1"),
+      VcrResponse(200, "ok", Map("SENSITIVE_DATA" -> Seq("DO_NOT_RECORD_ME")), "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
-    client.addNewRecord(original)
+    client.addNewEntry(original)
 
-    val expected = VcrRecord(
-      VcrRecordRequest("GET", new URI("https://example.com/SAFE"), "{}", Map.empty, "HTTP/1.1"),
-      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
+    val expected = VcrEntry(
+      VcrRequest("GET", new URI("https://example.com/SAFE"), "{}", Map.empty, "HTTP/1.1"),
+      VcrResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
     assertEquals(client.newlyRecorded(), Seq(expected))
 
     client.save()
     val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)
-    val decoded   = decode[VcrRecords](savedJson).map(_.records)
+    val decoded   = decode[VcrEntries](savedJson).map(_.entries)
     assertEquals(decoded, Right(Vector(expected)))
   }
 
   test("Client loads the previous record when being constructed") {
-    val record  = VcrRecord(
-      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
-      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
+    val record  = VcrEntry(
+      VcrRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
+      VcrResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
-    val rawJson = VcrRecords(Vector(record), BuildInfo.version).asJson.spaces2
+    val rawJson = VcrEntries(Vector(record), BuildInfo.version).asJson.spaces2
 
     val recordingPath = Files.createTempFile("test", ".json")
     Files.write(recordingPath, rawJson.getBytes(StandardCharsets.UTF_8))
@@ -82,7 +82,7 @@ class VcrClientSpec extends FunSuite {
     client.previouslyRecorded.get(VcrKey("bucket")) match {
       case None           => fail("Should load the record !!")
       case Some(previous) =>
-        assertEquals(previous.records, Vector(record))
+        assertEquals(previous.entries, Vector(record))
         assertEquals(previous.currentIndex.get(), 0)
     }
   }

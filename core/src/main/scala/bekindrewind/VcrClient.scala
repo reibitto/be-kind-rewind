@@ -11,51 +11,51 @@ trait VcrClient {
   def recordOptions: RecordOptions
   def matcher: VcrMatcher
 
-  val previouslyRecorded: Map[VcrKey, StatefulVcrRecords] = {
-    val records = if (recordOptions.overwriteAll) {
-      Map.empty[VcrKey, StatefulVcrRecords]
+  val previouslyRecorded: Map[VcrKey, StatefulVcrEntries] = {
+    val entryMap = if (recordOptions.overwriteAll) {
+      Map.empty[VcrKey, StatefulVcrEntries]
     } else {
       VcrIO.read(recordingPath) match {
         case Left(_) =>
-          Map.empty[VcrKey, StatefulVcrRecords]
+          Map.empty[VcrKey, StatefulVcrEntries]
 
-        case Right(records) =>
-          println(s"Loaded ${records.records.length} records")
-          records.records.groupBy(rec => matcher.group(rec.request)).map { case (anyKey, records) =>
-            anyKey -> StatefulVcrRecords.create(records)
+        case Right(entries) =>
+          println(s"Loaded ${entries.entries.length} entries")
+          entries.entries.groupBy(rec => matcher.group(rec.request)).map { case (anyKey, entries) =>
+            anyKey -> StatefulVcrEntries.create(entries)
           }
       }
     }
 
-    records
+    entryMap
   }
 
-  def addNewRecord(recordRequest: VcrRecord): Unit =
-    newlyRecordedRef.updateAndGet { records =>
-      records :+ matcher.transform(recordRequest)
+  def addNewEntry(entry: VcrEntry): Unit =
+    newlyRecordedRef.updateAndGet { entries =>
+      entries :+ matcher.transform(entry)
     }
 
-  def newlyRecorded(): immutable.Seq[VcrRecord] = newlyRecordedRef.get()
+  def newlyRecorded(): immutable.Seq[VcrEntry] = newlyRecordedRef.get()
 
-  private val newlyRecordedRef: AtomicReference[Vector[VcrRecord]] =
+  private val newlyRecordedRef: AtomicReference[Vector[VcrEntry]] =
     new AtomicReference(Vector.empty)
 
-  def findMatch[T, R](recordRequest: VcrRecordRequest): Option[VcrRecord] =
-    previouslyRecorded.get(matcher.group(recordRequest)).flatMap { records =>
-      val i = records.currentIndex.getAndIncrement()
-      records.records.filter(r => matcher.group(r.request) areSameGroupedKey matcher.group(recordRequest)).lift(i)
+  def findMatch[T, R](vcrRequest: VcrRequest): Option[VcrEntry] =
+    previouslyRecorded.get(matcher.group(vcrRequest)).flatMap { entries =>
+      val i = entries.currentIndex.getAndIncrement()
+      entries.entries.filter(r => matcher.group(r.request) areSameGroupedKey matcher.group(vcrRequest)).lift(i)
     }
 
   def save(): Unit = {
-    val previousRecords = previouslyRecorded.values.flatMap(_.records).toVector.sortBy(_.recordedAt)
-    val newRecords      = newlyRecordedRef.get
-    val allRecords      = previousRecords ++ newRecords
+    val previousEntries = previouslyRecorded.values.flatMap(_.entries).toVector.sortBy(_.recordedAt)
+    val newEntries      = newlyRecordedRef.get
+    val allEntries      = previousEntries ++ newEntries
 
-    println(s"Writing ${allRecords.size} records to ${recordingPath.toAbsolutePath}")
+    println(s"Writing ${allEntries.size} entries to ${recordingPath.toAbsolutePath}")
 
     VcrIO.write(
       recordingPath,
-      VcrRecords(allRecords, BuildInfo.version)
+      VcrEntries(allEntries, BuildInfo.version)
     )
   }
 

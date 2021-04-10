@@ -1,7 +1,7 @@
 package bekindrewind.playwsstandalone
 
 import akka.stream.Materializer
-import bekindrewind.{ VcrClient, VcrRecord, VcrRecordRequest, VcrRecordResponse }
+import bekindrewind.{ VcrClient, VcrEntry, VcrRequest, VcrResponse }
 import play.api.libs.ws._
 
 import java.net.URI
@@ -90,7 +90,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
     withMethod(method).execute()
 
   override def execute(): Future[Response] = {
-    val recordRequest = VcrRecordRequest(
+    val vcrRequest = VcrRequest(
       req.method,
       req.uri,
       req.body.toString,
@@ -98,7 +98,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
       "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
     )
 
-    owner.findMatch(recordRequest) match {
+    owner.findMatch(vcrRequest) match {
       case Some(r) =>
         Future.successful(
           VcrStandaloneWSResponse(
@@ -114,7 +114,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
         implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
         implicit val mat: Materializer            = owner.materializer
 
-        if (owner.matcher.shouldRecord(recordRequest)) {
+        if (owner.matcher.shouldRecord(vcrRequest)) {
           println(s"Performing actual HTTP request: ${req.method} ${req.uri}")
 
           for {
@@ -124,15 +124,15 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
                              case SourceBody(source) => source.runFold("")(_ + _.utf8String)
                            }
             res         <- req.execute(method).map { res =>
-                             val record = VcrRecord(
-                               VcrRecordRequest(
+                             val record = VcrEntry(
+                               VcrRequest(
                                  req.method,
                                  req.uri,
                                  requestBody,
                                  req.headers,
                                  "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
                                ),
-                               VcrRecordResponse(
+                               VcrResponse(
                                  res.status,
                                  res.statusText,
                                  res.headers.map { case (k, v) =>
@@ -144,7 +144,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
                                OffsetDateTime.now
                              )
 
-                             owner.addNewRecord(record)
+                             owner.addNewEntry(record)
 
                              res
                            }
@@ -153,7 +153,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
         } else if (owner.recordOptions.notRecordedThrowsErrors) {
           Future.failed(
             new Exception(
-              s"Recording is disabled for `${recordRequest.method} ${recordRequest.uri}`. The HTTP request was not executed."
+              s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
             )
           )
         } else {
