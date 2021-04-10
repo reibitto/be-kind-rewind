@@ -31,14 +31,14 @@ trait VcrClient {
   }
 
   def addNewRecord(recordRequest: VcrRecord): Unit =
-    newlyRecorded.updateAndGet { records =>
+    newlyRecordedRef.updateAndGet { records =>
       val transformed = recordOptions.recordTransformer(recordRequest)
       records :+ transformed
     }
 
-  def currentNewlyRecorded(): immutable.Seq[VcrRecord] = newlyRecorded.get()
+  def newlyRecorded(): immutable.Seq[VcrRecord] = newlyRecordedRef.get()
 
-  private val newlyRecorded: AtomicReference[Vector[VcrRecord]] =
+  private val newlyRecordedRef: AtomicReference[Vector[VcrRecord]] =
     new AtomicReference(Vector.empty)
 
   def findMatch[T, R](recordRequest: VcrRecordRequest): Option[VcrRecord] =
@@ -49,7 +49,7 @@ trait VcrClient {
 
   def save(): Unit = {
     val previousRecords = previouslyRecorded.values.flatMap(_.records).toVector.sortBy(_.recordedAt)
-    val newRecords      = newlyRecorded.get
+    val newRecords      = newlyRecordedRef.get
     val allRecords      = previousRecords ++ newRecords
 
     println(s"Writing ${allRecords.size} records to ${recordingPath.toAbsolutePath}")
