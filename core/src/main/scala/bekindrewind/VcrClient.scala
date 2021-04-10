@@ -11,7 +11,7 @@ trait VcrClient {
   def recordOptions: RecordOptions
   def matcher: VcrMatcher
 
-  val previouslyRecorded: Map[VcrKey, StatefulVcrEntries] = {
+  protected[bekindrewind] val previouslyRecorded: Map[VcrKey, StatefulVcrEntries] = {
     val entryMap = if (recordOptions.overwriteAll) {
       Map.empty[VcrKey, StatefulVcrEntries]
     } else {

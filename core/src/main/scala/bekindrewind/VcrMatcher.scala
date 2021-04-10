@@ -17,27 +17,53 @@ sealed trait VcrMatcher {
    */
   def group(request: VcrRequest): VcrKey
 
+  /** Finds the first VcrMatcher that matches the specified VcrRequest. */
   def matcherFor(request: VcrRequest): Option[VcrMatcher]
 
   /** Returns whether the specified request will be recorded by this matcher or not. */
   def shouldRecord(request: VcrRequest): Boolean = matcherFor(request).isDefined
 
-  def transform(record: VcrEntry): VcrEntry
+  /**
+   * Transforms a VcrEntry with the transformer attached to this matcher. One usage for this is to filter sensitive
+   * data from a request/response.
+   */
+  def transform(entry: VcrEntry): VcrEntry
 
+  /**
+   * Attached the specified grouping function to this matcher.
+   */
   def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher
 
   /**
-   * Applies the specified predicate to determine whether the request should be recorded or not.
+   * Attaches the specified predicate to determine whether the request should be recorded or not to this matcher.
    */
   def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher
 
+  /**
+   * Attaches the specified VCR entry transformer to this matcher.
+   */
   def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher
 }
 
 object VcrMatcher {
-  def default: VcrMatcher  = VcrMatcher.One(req => VcrKey(req.method, req.uri), _ => true, r => r)
+
+  /**
+   * The default VcrMatcher which matches on HTTP method + URI. This does not match on the request body, HTTP headers, etc.
+   */
+  def default: VcrMatcher = VcrMatcher.One(req => VcrKey(req.method, req.uri), _ => true, r => r)
+
+  /**
+   * A VcrMatcher that matches on the entire VcrRequest as is. In other words, it matches on every single field.
+   */
   def identity: VcrMatcher = VcrMatcher.groupBy(VcrKey(_))
 
+  /**
+   * Create a VcrMatcher with the specified grouping function. Example:
+   *
+   * {{{
+   * VcrMatcher.groupBy(req => (req.method, req.uri))
+   * }}}
+   */
   def groupBy[K](groupFn: VcrRequest => K): VcrMatcher =
     VcrMatcher.One(req => VcrKey.Grouped(groupFn(req)), _ => true, r => r)
 
@@ -66,7 +92,7 @@ object VcrMatcher {
     override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       copy(transformer = transformer)
 
-    override def transform(record: VcrEntry): VcrEntry = transformer(record)
+    override def transform(entry: VcrEntry): VcrEntry = transformer(entry)
 
     override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher = copy(grouper = grouper)
   }
@@ -90,8 +116,8 @@ object VcrMatcher {
       case VcrMatcher.Many(matchers) => VcrMatcher.Many(this.matchers ++ matchers)
     }
 
-    override def transform(record: VcrEntry): VcrEntry =
-      matcherFor(record.request).map(_.transform(record)).getOrElse(record)
+    override def transform(entry: VcrEntry): VcrEntry =
+      matcherFor(entry.request).map(_.transform(entry)).getOrElse(entry)
 
     override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       VcrMatcher.Many(
