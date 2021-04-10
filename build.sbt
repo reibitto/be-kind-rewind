@@ -3,11 +3,13 @@ import sbt.Keys._
 import sbt._
 import sbtwelcome._
 
-inThisBuild(List(
-  organization := "com.github.reibitto",
-  homepage := Some(url("https://github.com/reibitto/be-kind-rewind")),
-  licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
-))
+inThisBuild(
+  List(
+    organization := "com.github.reibitto",
+    homepage := Some(url("https://github.com/reibitto/be-kind-rewind")),
+    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
+  )
+)
 
 lazy val root = project
   .in(file("."))
@@ -30,7 +32,7 @@ lazy val root = project
          || __ -| -_|  |    -| |   | . |  |    -| -_| | | | |   | . |
          ||_____|___|  |__|__|_|_|_|___|  |__|__|___|_____|_|_|_|___|
          |
-         |                       ${version.value}
+         |  ${version.value}
          |
          |""".stripMargin,
     usefulTasks := Seq(
