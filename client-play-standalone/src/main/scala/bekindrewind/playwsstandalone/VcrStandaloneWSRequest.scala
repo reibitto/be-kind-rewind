@@ -11,7 +11,7 @@ import scala.concurrent.{ ExecutionContextExecutor, Future }
 
 class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSClient) extends StandaloneWSRequest {
   override type Self     = VcrStandaloneWSRequest
-  override type Response = StandaloneWSResponse // TODO: Change to VcrWSResponse?
+  override type Response = StandaloneWSResponse
 
   implicit def toVcrWSRequest(req: StandaloneWSRequest): VcrStandaloneWSRequest =
     new VcrStandaloneWSRequest(req, owner)
@@ -95,7 +95,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
       req.uri,
       req.body.toString,
       req.headers,
-      "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+      "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
     )
 
     owner.findMatch(vcrRequest) match {
@@ -128,7 +128,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
                                  req.uri,
                                  requestBody,
                                  req.headers,
-                                 "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+                                 "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
                                ),
                                VcrResponse(
                                  res.status,

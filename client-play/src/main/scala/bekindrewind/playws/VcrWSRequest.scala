@@ -96,7 +96,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
       req.uri,
       req.body.toString,
       req.headers,
-      "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+      "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
     )
 
     owner.findMatch(vcrRequest) match {
@@ -129,7 +129,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                                  req.uri,
                                  requestBody,
                                  req.headers,
-                                 "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+                                 "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
                                ),
                                VcrResponse(
                                  res.status,

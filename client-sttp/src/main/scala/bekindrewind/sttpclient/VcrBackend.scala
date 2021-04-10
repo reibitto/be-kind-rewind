@@ -31,7 +31,7 @@ class VcrBackend[F[_], P](
       request.uri.toJavaUri,
       requestBodyToString(request.body),
       toPlainHeaders(request.headers),
-      "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+      "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
     )
 
     findMatch(vcrRequest) match {
@@ -66,7 +66,7 @@ class VcrBackend[F[_], P](
                                request.uri.toJavaUri,
                                requestBodyToString(request.body),
                                toPlainHeaders(request.headers),
-                               "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+                               "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
                              ),
                              VcrResponse(
                                response.code.code,
