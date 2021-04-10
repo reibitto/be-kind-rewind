@@ -1,9 +1,12 @@
 package bekindrewind
 
+import scala.concurrent.duration.FiniteDuration
+
 final case class RecordOptions(
   shouldRecord: VcrRecordRequest => Boolean,
   notRecordedThrowsErrors: Boolean,
   overwriteAll: Boolean,
+  expiresAfter: Option[FiniteDuration],
   recordTransformer: RecordTransformer
 ) {
   def shouldRecord(shouldRecord: VcrRecordRequest => Boolean): RecordOptions =
@@ -21,6 +24,7 @@ object RecordOptions {
     _ => true,
     notRecordedThrowsErrors = false,
     overwriteAll = false,
+    expiresAfter = None,
     recordTransformer = identity
   )
 
@@ -28,6 +32,7 @@ object RecordOptions {
     _ => false,
     notRecordedThrowsErrors = false,
     overwriteAll = false,
+    expiresAfter = None,
     recordTransformer = identity
   )
 }

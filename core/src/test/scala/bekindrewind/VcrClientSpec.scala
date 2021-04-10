@@ -86,6 +86,33 @@ class VcrClientSpec extends FunSuite {
     }
   }
 
+  test("Record file should have expiration field if option specified") {
+    import scala.concurrent.duration._
+    val recordingPath = Files.createTempFile("test", ".json")
+    val client        = MockClient(
+      recordingPath,
+      RecordOptions.default.copy(
+        expiresAfter = Some(90 days)
+      ),
+      VcrMatcher(_ => true)
+    )
+    assert(client.previouslyRecorded.isEmpty)
+    assert(client.newlyRecorded().isEmpty)
+
+    val record = VcrRecord(
+      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
+      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
+      OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
+    )
+    client.addNewRecord(record)
+    client.save()
+
+    val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)
+    val decoded   = decode[VcrRecords](savedJson)
+    assertEquals(decoded.map(_.records), Right(Vector(record)))
+    assert(decoded.toOption.flatMap(_.expiration).isDefined)
+  }
+
   test("The previous records are not loaded if current date time is after expiration") {
     val record  = VcrRecord(
       VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
