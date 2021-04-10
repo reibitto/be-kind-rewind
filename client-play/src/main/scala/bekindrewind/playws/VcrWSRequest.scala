@@ -115,7 +115,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
         implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
         implicit val mat: Materializer            = owner.materializer
 
-        if (owner.recordOptions.shouldRecord(recordRequest)) {
+        if (owner.matcher.shouldRecord(recordRequest)) {
           println(s"Performing actual HTTP request: ${req.method} ${req.uri}")
 
           for {

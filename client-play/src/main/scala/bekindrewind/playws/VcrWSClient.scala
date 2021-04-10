@@ -1,7 +1,7 @@
 package bekindrewind.playws
 
 import akka.stream.Materializer
-import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
+import bekindrewind.{ RecordOptions, VcrClient, VcrKey, VcrMatcher }
 import play.api.libs.ws.{ WSClient, WSRequest }
 
 import java.nio.file.Path
@@ -33,7 +33,7 @@ object VcrWSClient {
     underlyingClient: WSClient,
     recordingPath: Path,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
   )(implicit materializer: Materializer) =
     new VcrWSClient(underlyingClient, recordingPath, recordOptions, matcher)
 }

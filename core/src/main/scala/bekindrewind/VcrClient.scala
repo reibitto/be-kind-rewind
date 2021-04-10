@@ -10,17 +10,17 @@ trait VcrClient {
   def recordOptions: RecordOptions
   def matcher: VcrMatcher
 
-  val previouslyRecorded: Map[Any, StatefulVcrRecords] = {
+  val previouslyRecorded: Map[VcrKey, StatefulVcrRecords] = {
     val records = if (recordOptions.overwriteAll) {
-      Map.empty[Any, StatefulVcrRecords]
+      Map.empty[VcrKey, StatefulVcrRecords]
     } else {
       VcrIO.read(recordingPath) match {
         case Left(_) =>
-          Map.empty[Any, StatefulVcrRecords]
+          Map.empty[VcrKey, StatefulVcrRecords]
 
         case Right(records) =>
           println(s"Loaded ${records.records.length} records")
-          records.records.groupBy(rec => matcher.groupFn(rec.request)).map { case (anyKey, records) =>
+          records.records.groupBy(rec => matcher.group(rec.request)).map { case (anyKey, records) =>
             anyKey -> StatefulVcrRecords.create(records)
           }
       }
@@ -33,9 +33,9 @@ trait VcrClient {
     new AtomicReference(Vector.empty)
 
   def findMatch[T, R](recordRequest: VcrRecordRequest): Option[VcrRecord] =
-    previouslyRecorded.get(matcher.groupFn(recordRequest)).flatMap { records =>
+    previouslyRecorded.get(matcher.group(recordRequest)).flatMap { records =>
       val i = records.currentIndex.getAndIncrement()
-      records.records.filter(r => matcher.groupFn(r.request) == matcher.groupFn(recordRequest)).lift(i)
+      records.records.filter(r => matcher.group(r.request) areSameGroupedKey matcher.group(recordRequest)).lift(i)
     }
 
   def save(): Unit = {
