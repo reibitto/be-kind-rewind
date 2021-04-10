@@ -1,4 +1,4 @@
-package bekindrewind.uril
+package bekindrewind.util
 
 import bekindrewind.VcrRecordRequest
 import org.scalacheck.Gen

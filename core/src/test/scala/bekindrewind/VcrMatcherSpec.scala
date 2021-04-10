@@ -1,6 +1,6 @@
 package bekindrewind
 
-import bekindrewind.uril.Generators
+import bekindrewind.util.Generators
 import munit._
 import org.scalacheck.Prop._
 
