@@ -3,6 +3,7 @@ package bekindrewind
 import bekindrewind.util.VcrIO
 
 import java.nio.file.Path
+import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.immutable
 
@@ -20,9 +21,16 @@ trait VcrClient {
           Map.empty[Any, StatefulVcrRecords]
 
         case Right(records) =>
-          println(s"Loaded ${records.records.length} records")
-          records.records.groupBy(rec => matcher.groupFn(rec.request)).map { case (anyKey, records) =>
-            anyKey -> StatefulVcrRecords.create(records)
+          records.expiration match {
+            case Some(expiration) if OffsetDateTime.now().isAfter(expiration) =>
+              println(s"Previous records had been expired at ${expiration}")
+              Map.empty[Any, StatefulVcrRecords]
+
+            case _ =>
+              println(s"Loaded ${records.records.length} records")
+              records.records.groupBy(rec => matcher.groupFn(rec.request)).map { case (anyKey, records) =>
+                anyKey -> StatefulVcrRecords.create(records)
+              }
           }
       }
     }

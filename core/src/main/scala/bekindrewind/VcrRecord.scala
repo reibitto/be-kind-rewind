@@ -52,13 +52,13 @@ object VcrRecordResponse {
     Decoder.forProduct5("statusCode", "statusText", "headers", "body", "contentType")(VcrRecordResponse.apply)
 }
 
-final case class VcrRecords(records: Vector[VcrRecord], version: String)
+final case class VcrRecords(records: Vector[VcrRecord], version: String, expiration: Option[OffsetDateTime] = None)
 
 object VcrRecords {
   implicit val encoder: Encoder[VcrRecords] =
-    Encoder.forProduct2("records", "version")(o => (o.records, o.version))
+    Encoder.forProduct3("records", "version", "expiration")(o => (o.records, o.version, o.expiration))
 
-  implicit val decoder: Decoder[VcrRecords] = Decoder.forProduct2("records", "version")(VcrRecords.apply)
+  implicit val decoder: Decoder[VcrRecords] = Decoder.forProduct3("records", "version", "expiration")(VcrRecords.apply)
 }
 
 final case class StatefulVcrRecords(records: Vector[VcrRecord], currentIndex: AtomicInteger) {

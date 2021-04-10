@@ -86,6 +86,25 @@ class VcrClientSpec extends FunSuite {
     }
   }
 
+  test("The previous records are not loaded if current date time is after expiration") {
+    val record  = VcrRecord(
+      VcrRecordRequest("GET", new URI("https://example.com/foo.json"), "{}", Map.empty, "HTTP/1.1"),
+      VcrRecordResponse(200, "ok", Map.empty, "{}", Some("text/json")),
+      OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
+    )
+    val rawJson = VcrRecords(
+      Vector(record),
+      BuildInfo.version,
+      expiration = Some(OffsetDateTime.parse("2010-01-01T12:00:00Z"))
+    ).asJson.spaces2
+
+    val recordingPath = Files.createTempFile("test", ".json")
+    Files.write(recordingPath, rawJson.getBytes(StandardCharsets.UTF_8))
+
+    val client = MockClient(recordingPath, RecordOptions.default, VcrMatcher(_ => true))
+    assert(client.newlyRecorded().isEmpty)
+    assertEquals(client.previouslyRecorded.get(true), None)
+  }
 }
 
 case class MockClient(recordingPath: Path, recordOptions: RecordOptions, matcher: VcrMatcher) extends VcrClient
