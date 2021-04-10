@@ -18,7 +18,7 @@ import scala.collection.immutable
 import scala.util.Try
 
 class VcrBackend[F[_], P](
-  val underlying: SttpBackend[F, P],
+  val underlyingBackend: SttpBackend[F, P],
   val recordingPath: Path,
   val recordOptions: RecordOptions,
   val matcher: VcrMatcher
@@ -54,13 +54,13 @@ class VcrBackend[F[_], P](
         )
 
       case None =>
-        if (recordOptions.shouldRecord(recordRequest)) {
+        if (matcher.shouldRecord(recordRequest)) {
           println(s"Performing actual HTTP request: ${request.method} ${request.uri}")
 
-          implicit val monadError: MonadError[F] = underlying.responseMonad
+          implicit val monadError: MonadError[F] = underlyingBackend.responseMonad
 
           for {
-            response    <- request.response(asBothOption(request.response, asStringAlways)).send(underlying)
+            response    <- request.response(asBothOption(request.response, asStringAlways)).send(underlyingBackend)
             bodyAsString = response.body._2.getOrElse("")
             record       = VcrRecord(
                              VcrRecordRequest(
@@ -82,23 +82,23 @@ class VcrBackend[F[_], P](
             _            = this.addNewRecord(record)
           } yield response.copy(body = response.body._1)
         } else if (recordOptions.notRecordedThrowsErrors) {
-          underlying.responseMonad.error(
+          underlyingBackend.responseMonad.error(
             new Exception(
               s"Recording is disabled for `${recordRequest.method} ${recordRequest.uri}`. The HTTP request was not executed."
             )
           )
         } else {
-          underlying.send(request)
+          underlyingBackend.send(request)
         }
     }
   }
 
   def close(): F[Unit] = {
     Try(save()).failed.foreach(_.printStackTrace())
-    underlying.close()
+    underlyingBackend.close()
   }
 
-  def responseMonad: MonadError[F] = underlying.responseMonad
+  def responseMonad: MonadError[F] = underlyingBackend.responseMonad
 
   private def requestBodyToString[R](requestBody: RequestBody[R]): String =
     requestBody match {
@@ -130,7 +130,7 @@ object VcrBackend {
     underlyingClient: SttpBackend[F, P],
     recordingPath: Path,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
   ): VcrBackend[F, P] =
     new VcrBackend[F, P](
       underlyingClient,

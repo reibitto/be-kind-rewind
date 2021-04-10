@@ -50,17 +50,17 @@ object Build {
   def defaultSettings(projectName: String) =
     Seq(
       name := projectName,
-      javaOptions in Test += "-Duser.timezone=UTC",
+      Test / javaOptions += "-Duser.timezone=UTC",
       scalacOptions := ScalacOptions.value,
-      scalaVersion in ThisBuild := Scala213Version,
-      crossScalaVersions in ThisBuild := Seq(Scala213Version, Scala212Version),
+      ThisBuild / scalaVersion := Scala213Version,
+      ThisBuild / crossScalaVersions := Seq(Scala213Version, Scala212Version),
       libraryDependencies ++= Plugins.BaseCompilerPlugins,
       incOptions ~= (_.withLogRecompileOnMacro(false)),
       autoAPIMappings := true,
       resolvers := Resolvers,
       testFrameworks := Seq(new TestFramework("munit.Framework")),
-      fork in Test := true,
-      logBuffered in Test := false
+      Test / fork := true,
+      Test / logBuffered := false
     )
 
   lazy val Resolvers = Seq(
