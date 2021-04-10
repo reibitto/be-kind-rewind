@@ -3,7 +3,8 @@ package bekindrewind
 final case class RecordOptions(
   shouldRecord: VcrRecordRequest => Boolean,
   notRecordedThrowsErrors: Boolean,
-  overwriteAll: Boolean
+  overwriteAll: Boolean,
+  recordTransformer: RecordTransformer
 ) {
   def shouldRecord(shouldRecord: VcrRecordRequest => Boolean): RecordOptions =
     copy(shouldRecord = shouldRecord)
@@ -16,7 +17,21 @@ final case class RecordOptions(
 }
 
 object RecordOptions {
-  val default: RecordOptions = RecordOptions(_ => true, notRecordedThrowsErrors = false, overwriteAll = false)
+  val default: RecordOptions = RecordOptions(
+    _ => true,
+    notRecordedThrowsErrors = false,
+    overwriteAll = false,
+    recordTransformer = identity
+  )
 
-  val off: RecordOptions = RecordOptions(_ => false, notRecordedThrowsErrors = false, overwriteAll = false)
+  val off: RecordOptions = RecordOptions(
+    _ => false,
+    notRecordedThrowsErrors = false,
+    overwriteAll = false,
+    recordTransformer = identity
+  )
+}
+
+trait RecordTransformer {
+  def apply(request: VcrRecord): VcrRecord
 }

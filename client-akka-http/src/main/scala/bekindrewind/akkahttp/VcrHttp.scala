@@ -125,9 +125,7 @@ class VcrHttp private (
           if (this.recordOptions.shouldRecord(vcrRequest)) {
             sendRequest(request).flatMap { response =>
               toVcrResponse(response).map { vcrResponse =>
-                this.newlyRecorded.updateAndGet { records =>
-                  records :+ VcrRecord(vcrRequest, vcrResponse, OffsetDateTime.now())
-                }
+                this.addNewRecord(VcrRecord(vcrRequest, vcrResponse, OffsetDateTime.now()))
                 response
               }
             }

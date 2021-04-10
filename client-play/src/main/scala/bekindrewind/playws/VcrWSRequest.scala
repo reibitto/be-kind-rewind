@@ -145,9 +145,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                                OffsetDateTime.now
                              )
 
-                             owner.newlyRecorded.updateAndGet { records =>
-                               records :+ record
-                             }
+                             owner.addNewRecord(record)
 
                              res
                            }
