@@ -16,6 +16,7 @@ lazy val root = project
   .aggregate(
     core,
     codecCirceJson,
+    codecCirceYaml,
     clientAkkaHttp,
     clientSttp,
     clientPlay,
@@ -55,13 +56,23 @@ lazy val core = module("be-kind-rewind", Some("core"))
   )
   .enablePlugins(BuildInfoPlugin)
 
-lazy val codecCirceJson = module("be-kind-rewind-codec-circe", Some("codec-circe"))
+lazy val codecCirceJson = module("be-kind-rewind-codec-circe-json", Some("codec-circe-json"))
   .settings(
     fork := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core"   % Version.circe,
       "io.circe" %% "circe-parser" % Version.circe
+    )
+  )
+  .dependsOn(core)
+
+lazy val codecCirceYaml = module("be-kind-rewind-codec-circe-yaml", Some("codec-circe-yaml"))
+  .settings(
+    fork := true,
+    run / baseDirectory := file("."),
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-yaml" % Version.circe
     )
   )
   .dependsOn(core)
