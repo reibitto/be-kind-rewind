@@ -50,12 +50,16 @@ object VcrMatcher {
   /**
    * The default VcrMatcher which matches on HTTP method + URI. This does not match on the request body, HTTP headers, etc.
    */
-  def default: VcrMatcher = VcrMatcher.One(req => VcrKey(req.method, req.uri), _ => true, r => r)
+  def default: VcrMatcher = VcrMatcher.One(
+    grouper = req => VcrKey(req.method, req.uri),
+    shouldRecordPredicate = _ => true,
+    transformer = entry => entry
+  )
 
   /**
    * A VcrMatcher that matches on the entire VcrRequest as is. In other words, it matches on every single field.
    */
-  def identity: VcrMatcher = VcrMatcher.groupBy(VcrKey(_))
+  def identity: VcrMatcher = VcrMatcher.groupBy(req => req)
 
   /**
    * Create a VcrMatcher with the specified grouping function. Example:
@@ -65,7 +69,11 @@ object VcrMatcher {
    * }}}
    */
   def groupBy[K](groupFn: VcrRequest => K): VcrMatcher =
-    VcrMatcher.One(req => VcrKey.Grouped(groupFn(req)), _ => true, r => r)
+    VcrMatcher.One(
+      grouper = req => VcrKey.Grouped(groupFn(req)),
+      shouldRecordPredicate = _ => true,
+      transformer = entry => entry
+    )
 
   final case class One(
     grouper: VcrRequest => VcrKey,

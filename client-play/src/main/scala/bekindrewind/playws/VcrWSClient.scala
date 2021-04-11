@@ -2,7 +2,7 @@ package bekindrewind.playws
 
 import akka.stream.Materializer
 import bekindrewind.storage.VcrStorage
-import bekindrewind.{ RecordOptions, VcrClient, VcrKey, VcrMatcher }
+import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
 import play.api.libs.ws.{ WSClient, WSRequest }
 
 import scala.util.Try
@@ -33,7 +33,7 @@ object VcrWSClient {
     underlyingClient: WSClient,
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
   )(implicit materializer: Materializer) =
     new VcrWSClient(underlyingClient, storage, recordOptions, matcher)
 }

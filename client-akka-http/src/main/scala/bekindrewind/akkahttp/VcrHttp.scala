@@ -21,14 +21,14 @@ object VcrHttp {
     sendRequest: HttpRequest => Future[HttpResponse],
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
   )(implicit executionContext: ExecutionContext, materializer: Materializer): VcrHttp =
     new VcrHttp(sendRequest, storage, recordOptions, matcher)
 
   def useClassicActorSystem(
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri)),
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri)),
     executionContext: Option[ExecutionContext] = None
   )(implicit system: ClassicActorSystemProvider): VcrHttp = {
     implicit val ec = executionContext.getOrElse(system.classicSystem.dispatcher)

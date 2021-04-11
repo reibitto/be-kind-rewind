@@ -7,7 +7,7 @@ inThisBuild(
   List(
     organization := "com.github.reibitto",
     homepage := Some(url("https://github.com/reibitto/be-kind-rewind")),
-    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
+    licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0"))
   )
 )
 
@@ -83,7 +83,8 @@ lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %% "core"  % Version.sttp,
-      "com.softwaremill.sttp.client3" %% "circe" % Version.sttp
+      "com.softwaremill.sttp.client3" %% "circe" % Version.sttp,
+      "org.scalameta"                 %% "munit" % Version.munit % Test
     )
   )
   .dependsOn(core)
@@ -103,7 +104,7 @@ lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
     fork := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
-      "com.typesafe.play" %% "play-ws" % "2.8.7"
+      "com.typesafe.play" %% "play-ws" % "2.8.8"
     )
   )
   .dependsOn(core)

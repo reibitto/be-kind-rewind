@@ -10,8 +10,8 @@ import scala.util.Try
 class VcrStandaloneWSClient(
   val underlyingClient: StandaloneWSClient,
   val storage: VcrStorage,
-  val recordOptions: RecordOptions = RecordOptions.default,
-  val matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
+  val recordOptions: RecordOptions,
+  val matcher: VcrMatcher
 )(implicit val materializer: Materializer)
     extends StandaloneWSClient
     with VcrClient {
@@ -26,4 +26,14 @@ class VcrStandaloneWSClient(
     Try(save()).failed.foreach(_.printStackTrace())
     underlyingClient.close()
   }
+}
+
+object VcrStandaloneWSClient {
+  def apply(
+    underlyingClient: StandaloneWSClient,
+    storage: VcrStorage,
+    recordOptions: RecordOptions = RecordOptions.default,
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
+  )(implicit materializer: Materializer) =
+    new VcrStandaloneWSClient(underlyingClient, storage, recordOptions, matcher)
 }
