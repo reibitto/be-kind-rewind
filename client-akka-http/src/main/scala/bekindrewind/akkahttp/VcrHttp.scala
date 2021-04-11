@@ -1,17 +1,16 @@
 package bekindrewind.akkahttp
 
 import bekindrewind._
-
 import akka.actor.ClassicActorSystemProvider
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
 import akka.util.ByteString
+import bekindrewind.storage.VcrStorage
 
 import java.io.Closeable
 import java.net.URI
-import java.nio.file.Path
 import java.time.OffsetDateTime
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.collection.immutable
@@ -20,20 +19,20 @@ import scala.util.Try
 object VcrHttp {
   def create(
     sendRequest: HttpRequest => Future[HttpResponse],
-    recordingPath: Path,
+    storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
     matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
   )(implicit executionContext: ExecutionContext, materializer: Materializer): VcrHttp =
-    new VcrHttp(sendRequest, recordingPath, recordOptions, matcher)
+    new VcrHttp(sendRequest, storage, recordOptions, matcher)
 
   def useClassicActorSystem(
-    recordingPath: Path,
+    storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
     matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri)),
     executionContext: Option[ExecutionContext] = None
   )(implicit system: ClassicActorSystemProvider): VcrHttp = {
     implicit val ec = executionContext.getOrElse(system.classicSystem.dispatcher)
-    create(Http().singleRequest(_), recordingPath, recordOptions, matcher)
+    create(Http().singleRequest(_), storage, recordOptions, matcher)
   }
 
   private[akkahttp] def toVcrRequest(
@@ -106,7 +105,7 @@ object VcrHttp {
 // Akka Http does not have "Client" concept.
 class VcrHttp private (
   sendRequest: HttpRequest => Future[HttpResponse],
-  val recordingPath: Path,
+  val storage: VcrStorage,
   val recordOptions: RecordOptions,
   val matcher: VcrMatcher
 )(implicit val ec: ExecutionContext, materializer: Materializer)

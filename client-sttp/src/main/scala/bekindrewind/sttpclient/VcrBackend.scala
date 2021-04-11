@@ -1,6 +1,7 @@
 package bekindrewind.sttpclient
 
 import bekindrewind._
+import bekindrewind.storage.VcrStorage
 import bekindrewind.util.IOUtils
 import sttp.capabilities
 import sttp.client3._
@@ -12,14 +13,13 @@ import sttp.monad.MonadError
 import sttp.monad.syntax._
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.Path
 import java.time.OffsetDateTime
 import scala.collection.immutable
 import scala.util.Try
 
 class VcrBackend[F[_], P](
   val underlyingBackend: SttpBackend[F, P],
-  val recordingPath: Path,
+  val storage: VcrStorage,
   val recordOptions: RecordOptions,
   val matcher: VcrMatcher
 ) extends SttpBackend[F, P]
@@ -126,13 +126,13 @@ class VcrBackend[F[_], P](
 object VcrBackend {
   def apply[F[_], P](
     underlyingClient: SttpBackend[F, P],
-    recordingPath: Path,
+    storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
     matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
   ): VcrBackend[F, P] =
     new VcrBackend[F, P](
       underlyingClient,
-      recordingPath,
+      storage,
       recordOptions,
       matcher
     )
