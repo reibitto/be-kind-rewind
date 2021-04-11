@@ -2,7 +2,7 @@ package bekindrewind.playws
 
 import akka.stream.Materializer
 import bekindrewind.storage.VcrStorage
-import bekindrewind.{ RecordOptions, VcrClient, VcrKey, VcrMatcher }
+import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
 import play.api.libs.ws.{ WSClient, WSRequest }
 
 import scala.util.Try
