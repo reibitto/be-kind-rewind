@@ -123,7 +123,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                              case SourceBody(source) => source.runFold("")(_ + _.utf8String)
                            }
             res         <- req.execute(method).map { res =>
-                             val record = VcrEntry(
+                             val entry = VcrEntry(
                                VcrRequest(
                                  req.method,
                                  req.uri,
@@ -143,7 +143,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
                                OffsetDateTime.now
                              )
 
-                             owner.addNewEntry(record)
+                             owner.addNewEntry(entry)
 
                              res
                            }

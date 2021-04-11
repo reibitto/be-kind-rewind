@@ -52,13 +52,13 @@ object VcrResponse {
     Decoder.forProduct5("statusCode", "statusText", "headers", "body", "contentType")(VcrResponse.apply)
 }
 
-final case class VcrEntries(entries: Vector[VcrEntry], version: String)
+final case class VcrEntries(entries: Vector[VcrEntry], version: String, expiration: Option[OffsetDateTime] = None)
 
 object VcrEntries {
   implicit val encoder: Encoder[VcrEntries] =
-    Encoder.forProduct2("entries", "version")(o => (o.entries, o.version))
+    Encoder.forProduct3("entries", "version", "expiration")(o => (o.entries, o.version, o.expiration))
 
-  implicit val decoder: Decoder[VcrEntries] = Decoder.forProduct2("entries", "version")(VcrEntries.apply)
+  implicit val decoder: Decoder[VcrEntries] = Decoder.forProduct3("entries", "version", "expiration")(VcrEntries.apply)
 }
 
 final case class StatefulVcrEntries(entries: Vector[VcrEntry], currentIndex: AtomicInteger) {

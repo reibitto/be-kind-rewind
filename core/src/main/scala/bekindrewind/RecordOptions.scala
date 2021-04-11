@@ -1,7 +1,12 @@
 package bekindrewind
 
-final case class RecordOptions(notRecordedThrowsErrors: Boolean, overwriteAll: Boolean) {
+import java.time.Duration
 
+final case class RecordOptions(
+  notRecordedThrowsErrors: Boolean,
+  overwriteAll: Boolean,
+  expiresAfter: Option[Duration]
+) {
   def notRecordedThrowsErrors(notRecordedThrowsErrors: Boolean): RecordOptions =
     copy(notRecordedThrowsErrors = notRecordedThrowsErrors)
 
@@ -10,7 +15,7 @@ final case class RecordOptions(notRecordedThrowsErrors: Boolean, overwriteAll: B
 }
 
 object RecordOptions {
-  val default: RecordOptions = RecordOptions(notRecordedThrowsErrors = false, overwriteAll = false)
+  val default: RecordOptions = RecordOptions(notRecordedThrowsErrors = false, overwriteAll = false, expiresAfter = None)
 
-  val off: RecordOptions = RecordOptions(notRecordedThrowsErrors = false, overwriteAll = false)
+  val off: RecordOptions = RecordOptions(notRecordedThrowsErrors = false, overwriteAll = false, expiresAfter = None)
 }
