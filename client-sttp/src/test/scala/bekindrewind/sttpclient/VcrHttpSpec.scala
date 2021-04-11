@@ -8,6 +8,7 @@ import sttp.client3.testing.SttpBackendStub
 import sttp.model.{ Header, StatusCode }
 
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.immutable
 
 class VcrHttpSpec extends FunSuite {
   test("Save and load") {
@@ -70,7 +71,7 @@ class VcrHttpSpec extends FunSuite {
         Right(jsonEntity): Either[String, String],
         StatusCode.Ok,
         "",
-        headers = Seq(Header(VcrClient.vcrCacheHeaderName, "true"))
+        headers = immutable.Seq(Header(VcrClient.vcrCacheHeaderName, "true"))
       )
     )
 

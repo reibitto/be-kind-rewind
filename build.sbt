@@ -89,7 +89,7 @@ lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   )
   .dependsOn(core)
 
-lazy val clientPlayStandalone = module("be-kind-rewind-play-ws-standalone", Some("client-play-ws-standalone"))
+lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("client-play-standalone"))
   .settings(
     fork := true,
     run / baseDirectory := file("."),
@@ -99,7 +99,7 @@ lazy val clientPlayStandalone = module("be-kind-rewind-play-ws-standalone", Some
   )
   .dependsOn(core)
 
-lazy val clientPlay = module("be-kind-rewind-play-ws", Some("client-play-ws"))
+lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
   .settings(
     fork := true,
     run / baseDirectory := file("."),
