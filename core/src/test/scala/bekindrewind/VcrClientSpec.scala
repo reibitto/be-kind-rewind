@@ -8,6 +8,7 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file._
 import java.time.{ Duration, OffsetDateTime }
+import scala.collection.immutable
 
 class VcrClientSpec extends FunSuite {
 
@@ -40,7 +41,7 @@ class VcrClientSpec extends FunSuite {
       VcrMatcher.identity.withTransformer { case entry @ VcrEntry(req, res, _) =>
         entry.copy(
           request = req.copy(uri = new URI("https://example.com/SAFE")),
-          response = res.copy(headers = res.headers.removed("SENSITIVE_DATA"))
+          response = res.copy(headers = res.headers - "SENSITIVE_DATA")
         )
       }
     )
@@ -57,7 +58,7 @@ class VcrClientSpec extends FunSuite {
       VcrResponse(200, "ok", Map.empty, "{}", Some("text/json")),
       OffsetDateTime.parse("2100-05-06T12:34:56.789Z")
     )
-    assertEquals(client.newlyRecorded(), Seq(expected))
+    assertEquals(client.newlyRecorded(), immutable.Seq(expected))
 
     client.save()
     val savedJson = new String(Files.readAllBytes(recordingPath), StandardCharsets.UTF_8)

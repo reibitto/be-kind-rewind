@@ -12,13 +12,15 @@ jobs:
       fail-fast: false
       matrix:
         scala: [2.13.5, 2.12.13]
-        java: [11, 8]
+        java: [adopt@1.11, adopt@1.8]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
       - name: Set up environment
         uses: olafurpg/setup-scala@v10
+        with:
+          java-version: ${{ matrix.java }}
 
       - name: Run tests
-        run: sbt -Dscalac.unused.enabled=true fmtCheck test
+        run: sbt ++${{ matrix.scala}}  -Dscalac.unused.enabled=true fmtCheck test
