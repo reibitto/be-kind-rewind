@@ -1,14 +1,14 @@
 package bekindrewind
 
-import bekindrewind.util.VcrIO
+import bekindrewind.storage.VcrStorage
 
-import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.immutable
 
 trait VcrClient {
-  def recordingPath: Path
+  def storage: VcrStorage
+
   def recordOptions: RecordOptions
   def matcher: VcrMatcher
 
@@ -16,7 +16,7 @@ trait VcrClient {
     val entryMap = if (recordOptions.overwriteAll) {
       Map.empty[VcrKey, StatefulVcrEntries]
     } else {
-      VcrIO.read(recordingPath) match {
+      storage.read() match {
         case Left(_) =>
           Map.empty[VcrKey, StatefulVcrEntries]
 
@@ -59,10 +59,7 @@ trait VcrClient {
 
     val expiration = recordOptions.expiresAfter.map(duration => OffsetDateTime.now().plus(duration))
 
-    VcrIO.write(
-      recordingPath,
-      VcrEntries(allEntries, BuildInfo.version, expiration)
-    )
+    storage.write(VcrEntries(allEntries, BuildInfo.version, expiration))
   }
 
 }

@@ -1,15 +1,15 @@
 package bekindrewind.playwsstandalone
 
 import akka.stream.Materializer
+import bekindrewind.storage.VcrStorage
 import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
 import play.api.libs.ws.{ StandaloneWSClient, StandaloneWSRequest }
 
-import java.nio.file.Path
 import scala.util.Try
 
 class VcrStandaloneWSClient(
   val underlyingClient: StandaloneWSClient,
-  val recordingPath: Path,
+  val storage: VcrStorage,
   val recordOptions: RecordOptions = RecordOptions.default,
   val matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
 )(implicit val materializer: Materializer)
