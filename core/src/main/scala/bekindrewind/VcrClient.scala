@@ -7,10 +7,21 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.collection.immutable
 
 trait VcrClient {
-  def storage: VcrStorage
 
-  def recordOptions: RecordOptions
+  /**
+   * Used to match HTTP requests with stored VCR entries to determine whether they should be replayed or not.
+   */
   def matcher: VcrMatcher
+
+  /**
+   * Used to specify recording options such as whether to throw errors or expire VCR entries after some time.
+   */
+  def recordOptions: RecordOptions
+
+  /**
+   * Responsible for storing/persisting recorded VCR entries to a file and so on (and which format: JSON, YAML, etc.)
+   */
+  def storage: VcrStorage
 
   protected[bekindrewind] val previouslyRecorded: Map[VcrKey, StatefulVcrEntries] = {
     val entryMap = if (recordOptions.overwriteAll) {

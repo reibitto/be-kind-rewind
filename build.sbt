@@ -72,7 +72,8 @@ lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %% "core"  % Version.sttp,
-      "com.softwaremill.sttp.client3" %% "circe" % Version.sttp
+      "com.softwaremill.sttp.client3" %% "circe" % Version.sttp,
+      "org.scalameta"                 %% "munit" % Version.munit % Test
     )
   )
   .dependsOn(core)
