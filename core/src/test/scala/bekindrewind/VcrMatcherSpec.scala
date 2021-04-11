@@ -9,7 +9,7 @@ import java.net.URI
 class VcrMatcherSpec extends ScalaCheckSuite {
 
   property("VcrMatcher.identity should allow all requests") {
-    forAll(Generators.vcrRecordRequest) { (req: VcrRecordRequest) =>
+    forAll(Generators.vcrRequest) { (req: VcrRequest) =>
       assert(VcrMatcher.identity.shouldRecord(req))
     }
   }
@@ -17,8 +17,8 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   test("VcrMatcher#filter") {
     val matcher = VcrMatcher.identity.withShouldRecord(_.method == "GET")
 
-    assert(matcher.shouldRecord(VcrRecordRequest("GET", new URI("https://example.com"), "", Map.empty, "HTTP/1.1")))
-    assert(!matcher.shouldRecord(VcrRecordRequest("POST", new URI("https://example.com"), "", Map.empty, "HTTP/1.1")))
+    assert(matcher.shouldRecord(VcrRequest("GET", new URI("https://example.com"), "", Map.empty, "HTTP/1.1")))
+    assert(!matcher.shouldRecord(VcrRequest("POST", new URI("https://example.com"), "", Map.empty, "HTTP/1.1")))
   }
 
   test("VcrMatcher#filter (append)") {
@@ -29,7 +29,7 @@ class VcrMatcherSpec extends ScalaCheckSuite {
 
     val combinedMatcher = matcher.append(matcher2)
 
-    val requestA = VcrRecordRequest("GET", uriA, "", Map.empty, "HTTP/1.1")
+    val requestA = VcrRequest("GET", uriA, "", Map.empty, "HTTP/1.1")
 
     assert(matcher.shouldRecord(requestA))
     assert(!matcher2.shouldRecord(requestA))
@@ -40,7 +40,7 @@ class VcrMatcherSpec extends ScalaCheckSuite {
     assert(combinedMatcher.group(requestA) == VcrKey("GET", uriA))
 
     // If the 1st matcher does not match, it should move on to the 2nd matcher
-    val requestB = VcrRecordRequest("GET", uriB, "", Map.empty, "HTTP/1.1")
+    val requestB = VcrRequest("GET", uriB, "", Map.empty, "HTTP/1.1")
 
     assert(!matcher.shouldRecord(requestB))
     assert(matcher2.shouldRecord(requestB))

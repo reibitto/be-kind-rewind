@@ -38,9 +38,9 @@ object VcrHttp {
 
   private[akkahttp] def toVcrRequest(
     request: HttpRequest
-  )(implicit executionContext: ExecutionContext, materializer: Materializer): Future[VcrRecordRequest] =
+  )(implicit executionContext: ExecutionContext, materializer: Materializer): Future[VcrRequest] =
     Unmarshal(request).to[String].map { requestBody =>
-      VcrRecordRequest(
+      VcrRequest(
         method = request.method.value,
         uri = URI.create(request.uri.toString()),
         body = requestBody,
@@ -56,8 +56,8 @@ object VcrHttp {
       Option(contentType.value)
 
   private[akkahttp] def toAkkaResponse(
-    vcrRecordRequest: VcrRecordRequest,
-    vcrResponse: VcrRecordResponse
+    vcrRequest: VcrRequest,
+    vcrResponse: VcrResponse
   ): HttpResponse =
     HttpResponse(
       status = StatusCodes.custom(vcrResponse.statusCode, vcrResponse.statusText),
@@ -74,14 +74,14 @@ object VcrHttp {
           )
         case None        => HttpEntity(vcrResponse.body)
       },
-      protocol = HttpProtocol.apply(vcrRecordRequest.httpVersion)
+      protocol = HttpProtocol.apply(vcrRequest.httpVersion)
     )
 
   private[akkahttp] def toVcrResponse(
     response: HttpResponse
-  )(implicit executionContext: ExecutionContext, materializer: Materializer): Future[VcrRecordResponse] =
+  )(implicit executionContext: ExecutionContext, materializer: Materializer): Future[VcrResponse] =
     Unmarshal(response).to[String].map { responseBody =>
-      VcrRecordResponse(
+      VcrResponse(
         statusCode = response.status.intValue(),
         statusText = response.status.reason(),
         headers = toVcrHeaders(response.headers),
@@ -120,12 +120,12 @@ class VcrHttp private (
   def send(request: HttpRequest): Future[HttpResponse] =
     toVcrRequest(request).flatMap { vcrRequest =>
       this.findMatch(vcrRequest) match {
-        case Some(VcrRecord(_, response, _)) => Future.successful(toAkkaResponse(vcrRequest, response))
-        case None                            =>
+        case Some(VcrEntry(_, response, _)) => Future.successful(toAkkaResponse(vcrRequest, response))
+        case None                           =>
           if (this.matcher.shouldRecord(vcrRequest)) {
             sendRequest(request).flatMap { response =>
               toVcrResponse(response).map { vcrResponse =>
-                this.addNewRecord(VcrRecord(vcrRequest, vcrResponse, OffsetDateTime.now()))
+                this.addNewEntry(VcrEntry(vcrRequest, vcrResponse, OffsetDateTime.now()))
                 response
               }
             }

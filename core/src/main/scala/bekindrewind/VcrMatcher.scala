@@ -15,47 +15,73 @@ sealed trait VcrMatcher {
    * Returns a VcrKey which is used to group/bucket requests that are considered equivalent (based on the specified
    * "groupBy" function.
    */
-  def group(request: VcrRecordRequest): VcrKey
+  def group(request: VcrRequest): VcrKey
 
-  def matcherFor(request: VcrRecordRequest): Option[VcrMatcher]
+  /** Finds the first VcrMatcher that matches the specified VcrRequest. */
+  def matcherFor(request: VcrRequest): Option[VcrMatcher]
 
   /** Returns whether the specified request will be recorded by this matcher or not. */
-  def shouldRecord(request: VcrRecordRequest): Boolean = matcherFor(request).isDefined
-
-  def transform(record: VcrRecord): VcrRecord
-
-  def withGrouper(grouper: VcrRecordRequest => VcrKey): VcrMatcher
+  def shouldRecord(request: VcrRequest): Boolean = matcherFor(request).isDefined
 
   /**
-   * Applies the specified predicate to determine whether the request should be recorded or not.
+   * Transforms a VcrEntry with the transformer attached to this matcher. One usage for this is to filter sensitive
+   * data from a request/response.
    */
-  def withShouldRecord(pred: VcrRecordRequest => Boolean): VcrMatcher
+  def transform(entry: VcrEntry): VcrEntry
 
-  def withTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher
+  /**
+   * Attached the specified grouping function to this matcher.
+   */
+  def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher
+
+  /**
+   * Attaches the specified predicate to determine whether the request should be recorded or not to this matcher.
+   */
+  def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher
+
+  /**
+   * Attaches the specified VCR entry transformer to this matcher.
+   */
+  def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher
 }
 
 object VcrMatcher {
-  def default: VcrMatcher  = VcrMatcher.One(req => VcrKey(req.method, req.uri), _ => true, r => r)
+
+  /**
+   * The default VcrMatcher which matches on HTTP method + URI. This does not match on the request body, HTTP headers, etc.
+   */
+  def default: VcrMatcher = VcrMatcher.One(req => VcrKey(req.method, req.uri), _ => true, r => r)
+
+  /**
+   * A VcrMatcher that matches on the entire VcrRequest as is. In other words, it matches on every single field.
+   */
   def identity: VcrMatcher = VcrMatcher.groupBy(VcrKey(_))
 
-  def groupBy[K](groupFn: VcrRecordRequest => K): VcrMatcher =
+  /**
+   * Create a VcrMatcher with the specified grouping function. Example:
+   *
+   * {{{
+   * VcrMatcher.groupBy(req => (req.method, req.uri))
+   * }}}
+   */
+  def groupBy[K](groupFn: VcrRequest => K): VcrMatcher =
     VcrMatcher.One(req => VcrKey.Grouped(groupFn(req)), _ => true, r => r)
 
   final case class One(
-    grouper: VcrRecordRequest => VcrKey,
-    shouldRecordPredicate: VcrRecordRequest => Boolean,
-    transformer: VcrRecord => VcrRecord
+    grouper: VcrRequest => VcrKey,
+    shouldRecordPredicate: VcrRequest => Boolean,
+    transformer: VcrEntry => VcrEntry
   ) extends VcrMatcher {
-    override def group(request: VcrRecordRequest): VcrKey =
+    override def group(request: VcrRequest): VcrKey =
       if (shouldRecord(request))
         grouper(request)
       else
         VcrKey.Ungrouped
 
-    override def matcherFor(request: VcrRecordRequest): Option[VcrMatcher] =
+    override def matcherFor(request: VcrRequest): Option[VcrMatcher] =
       if (shouldRecordPredicate(request)) Some(this) else None
 
-    override def withShouldRecord(pred: VcrRecordRequest => Boolean): VcrMatcher =
+    override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher =
       copy(shouldRecordPredicate = r => shouldRecordPredicate(r) && pred(r))
 
     override def append(other: VcrMatcher): VcrMatcher = other match {
@@ -63,22 +89,22 @@ object VcrMatcher {
       case VcrMatcher.Many(ms) => VcrMatcher.Many(this +: ms)
     }
 
-    override def withTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher =
+    override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       copy(transformer = transformer)
 
-    override def transform(record: VcrRecord): VcrRecord = transformer(record)
+    override def transform(entry: VcrEntry): VcrEntry = transformer(entry)
 
-    override def withGrouper(grouper: VcrRecordRequest => VcrKey): VcrMatcher = copy(grouper = grouper)
+    override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher = copy(grouper = grouper)
   }
 
   final case class Many(matchers: Vector[VcrMatcher.One]) extends VcrMatcher {
-    override def group(request: VcrRecordRequest): VcrKey =
+    override def group(request: VcrRequest): VcrKey =
       matcherFor(request).map(_.group(request)).getOrElse(VcrKey.Ungrouped)
 
-    override def matcherFor(request: VcrRecordRequest): Option[VcrMatcher] =
+    override def matcherFor(request: VcrRequest): Option[VcrMatcher] =
       matchers.find(_.shouldRecordPredicate(request))
 
-    override def withShouldRecord(pred: VcrRecordRequest => Boolean): VcrMatcher =
+    override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher =
       VcrMatcher.Many(
         matchers.map { matcher =>
           matcher.copy(shouldRecordPredicate = pred)
@@ -90,17 +116,17 @@ object VcrMatcher {
       case VcrMatcher.Many(matchers) => VcrMatcher.Many(this.matchers ++ matchers)
     }
 
-    override def transform(record: VcrRecord): VcrRecord =
-      matcherFor(record.request).map(_.transform(record)).getOrElse(record)
+    override def transform(entry: VcrEntry): VcrEntry =
+      matcherFor(entry.request).map(_.transform(entry)).getOrElse(entry)
 
-    override def withTransformer(transformer: VcrRecord => VcrRecord): VcrMatcher =
+    override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       VcrMatcher.Many(
         matchers.map { matcher =>
           matcher.copy(transformer = transformer)
         }
       )
 
-    override def withGrouper(grouper: VcrRecordRequest => VcrKey): VcrMatcher =
+    override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher =
       VcrMatcher.Many(
         matchers.map { matcher =>
           matcher.copy(grouper = grouper)

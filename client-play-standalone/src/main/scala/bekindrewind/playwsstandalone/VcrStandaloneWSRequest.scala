@@ -1,7 +1,7 @@
 package bekindrewind.playwsstandalone
 
 import akka.stream.Materializer
-import bekindrewind.{ VcrClient, VcrRecord, VcrRecordRequest, VcrRecordResponse }
+import bekindrewind.{ VcrClient, VcrEntry, VcrRequest, VcrResponse }
 import play.api.libs.ws._
 
 import java.net.URI
@@ -11,7 +11,7 @@ import scala.concurrent.{ ExecutionContextExecutor, Future }
 
 class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSClient) extends StandaloneWSRequest {
   override type Self     = VcrStandaloneWSRequest
-  override type Response = StandaloneWSResponse // TODO: Change to VcrWSResponse?
+  override type Response = StandaloneWSResponse
 
   implicit def toVcrWSRequest(req: StandaloneWSRequest): VcrStandaloneWSRequest =
     new VcrStandaloneWSRequest(req, owner)
@@ -90,15 +90,15 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
     withMethod(method).execute()
 
   override def execute(): Future[Response] = {
-    val recordRequest = VcrRecordRequest(
+    val vcrRequest = VcrRequest(
       req.method,
       req.uri,
       req.body.toString,
       req.headers,
-      "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+      "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
     )
 
-    owner.findMatch(recordRequest) match {
+    owner.findMatch(vcrRequest) match {
       case Some(r) =>
         Future.successful(
           VcrStandaloneWSResponse(
@@ -114,9 +114,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
         implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
         implicit val mat: Materializer            = owner.materializer
 
-        if (owner.matcher.shouldRecord(recordRequest)) {
-          println(s"Performing actual HTTP request: ${req.method} ${req.uri}")
-
+        if (owner.matcher.shouldRecord(vcrRequest)) {
           for {
             requestBody <- req.body match {
                              case EmptyBody          => Future.successful("")
@@ -124,15 +122,15 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
                              case SourceBody(source) => source.runFold("")(_ + _.utf8String)
                            }
             res         <- req.execute(method).map { res =>
-                             val record = VcrRecord(
-                               VcrRecordRequest(
+                             val entry = VcrEntry(
+                               VcrRequest(
                                  req.method,
                                  req.uri,
                                  requestBody,
                                  req.headers,
-                                 "HTTP/1.1" // FIXME: Support HTTP/1.0 and HTTP/2.0
+                                 "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
                                ),
-                               VcrRecordResponse(
+                               VcrResponse(
                                  res.status,
                                  res.statusText,
                                  res.headers.map { case (k, v) =>
@@ -144,7 +142,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
                                OffsetDateTime.now
                              )
 
-                             owner.addNewRecord(record)
+                             owner.addNewEntry(entry)
 
                              res
                            }
@@ -153,7 +151,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
         } else if (owner.recordOptions.notRecordedThrowsErrors) {
           Future.failed(
             new Exception(
-              s"Recording is disabled for `${recordRequest.method} ${recordRequest.uri}`. The HTTP request was not executed."
+              s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
             )
           )
         } else {
