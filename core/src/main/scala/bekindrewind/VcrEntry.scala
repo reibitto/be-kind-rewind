@@ -1,6 +1,6 @@
 package bekindrewind
 
-import bekindrewind.codec.Codecs._
+import bekindrewind.codec.CirceCodec._
 import io.circe.{ Decoder, Encoder }
 
 import java.net.URI
