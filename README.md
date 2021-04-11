@@ -22,10 +22,10 @@ Add the following dependencies:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-sttp" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
 ```
 
-_(Note: All the examples below use JSON storage using Circe, but you can swap the codec module out for something else)_
+_(See the [Codecs](#codecs) section if you want to use a different codec, such as for YAML)_
 
 Then:
 
@@ -60,7 +60,7 @@ Add the following dependency:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-play-ws-standalone" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
 ```
 
 Then:
@@ -106,7 +106,7 @@ Add the following dependency:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-play-ws" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
 ```
 
 Then:
@@ -155,7 +155,7 @@ Add the following dependency:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-akka-http" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
 ```
 
 Then:
@@ -372,6 +372,23 @@ request2.send(vcrBackend)
 
 // The recorded VCR file gets written on close
 vcrBackend.close()
+```
+
+### Codecs
+
+The examples above use JSON for storing the recorded VCR entries, but you can also use other formats (as well as custom ones)
+such as YAML.
+
+To use YAML, add the following dependency:
+
+```scala
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-yaml" % "0.1.0" // Optional
+```
+
+And then pass `YamlCodec` to `FileVcrStorage`:
+
+```scala
+FileVcrStorage(Paths.get("vcr/example.yml"), YamlCodec)
 ```
 
 ## Overview
