@@ -7,7 +7,7 @@ import munit._
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file._
-import java.time.OffsetDateTime
+import java.time.{ Duration, OffsetDateTime }
 
 class VcrClientSpec extends FunSuite {
 
@@ -88,12 +88,11 @@ class VcrClientSpec extends FunSuite {
   }
 
   test("Record file should have expiration field if option specified") {
-    import scala.concurrent.duration._
     val recordingPath = Files.createTempFile("test", ".json")
     val client        = MockClient(
       recordingPath,
       RecordOptions.default.copy(
-        expiresAfter = Some(90 days)
+        expiresAfter = Some(Duration.ofDays(90))
       ),
       VcrMatcher.identity
     )

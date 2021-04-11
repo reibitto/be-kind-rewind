@@ -59,7 +59,7 @@ trait VcrClient {
     val newRecords      = newlyRecordedRef.get
     val allRecords      = previousRecords ++ newRecords
 
-    val expiration = recordOptions.expiresAfter.map(duration => OffsetDateTime.now().plusNanos(duration.toNanos))
+    val expiration = recordOptions.expiresAfter.map(duration => OffsetDateTime.now().plus(duration))
 
     println(s"Writing ${allRecords.size} records to ${recordingPath.toAbsolutePath}")
     expiration.foreach(datetime => println(s"It will expire after $datetime"))

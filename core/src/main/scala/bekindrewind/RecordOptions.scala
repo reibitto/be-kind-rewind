@@ -1,11 +1,11 @@
 package bekindrewind
 
-import scala.concurrent.duration.FiniteDuration
+import java.time.Duration
 
 final case class RecordOptions(
   notRecordedThrowsErrors: Boolean,
   overwriteAll: Boolean,
-  expiresAfter: Option[FiniteDuration]
+  expiresAfter: Option[Duration]
 ) {
   def notRecordedThrowsErrors(notRecordedThrowsErrors: Boolean): RecordOptions =
     copy(notRecordedThrowsErrors = notRecordedThrowsErrors)
