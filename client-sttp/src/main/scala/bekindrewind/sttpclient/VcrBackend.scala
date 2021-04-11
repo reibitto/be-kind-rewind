@@ -128,7 +128,7 @@ object VcrBackend {
     underlyingClient: SttpBackend[F, P],
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
   ): VcrBackend[F, P] =
     new VcrBackend[F, P](
       underlyingClient,

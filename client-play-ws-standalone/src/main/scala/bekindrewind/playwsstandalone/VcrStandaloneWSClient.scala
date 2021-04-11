@@ -33,7 +33,7 @@ object VcrStandaloneWSClient {
     underlyingClient: StandaloneWSClient,
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
   )(implicit materializer: Materializer) =
     new VcrStandaloneWSClient(underlyingClient, storage, recordOptions, matcher)
 }

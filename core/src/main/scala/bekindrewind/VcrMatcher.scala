@@ -59,7 +59,7 @@ object VcrMatcher {
   /**
    * A VcrMatcher that matches on the entire VcrRequest as is. In other words, it matches on every single field.
    */
-  def identity: VcrMatcher = VcrMatcher.groupBy(VcrKey(_))
+  def identity: VcrMatcher = VcrMatcher.groupBy(req => req)
 
   /**
    * Create a VcrMatcher with the specified grouping function. Example:
