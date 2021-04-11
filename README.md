@@ -28,12 +28,13 @@ Then:
 
 ```scala
 import sttp.client3._
+import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  recordingPath = Paths.get("vcr/example.json")
+  storage = FileVcrStorage(Paths.get("vcr/example.json"))
 )
 
 val request = basicRequest.get(uri"https://postman-echo.com/get?a=1")
@@ -78,7 +79,7 @@ implicit val materializer = SystemMaterializer(system).materializer
 
 val client = VcrStandaloneWSClient(
   underlyingClient = StandaloneAhcWSClient(),
-  recordingPath = Paths.get("vcr/example.json")
+  storage = FileVcrStorage(Paths.get("vcr/example.json"))
 )
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
@@ -126,7 +127,7 @@ val wsClient: WSClient = ???
     
 val client = VcrWSClient(
   underlyingClient = wsClient,
-  recordingPath = Paths.get("vcr/example.json")
+  storage = FileVcrStorage(Paths.get("vcr/example.json"))
 )
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
@@ -183,6 +184,7 @@ write a custom matcher to accomplish this:
 
 ```scala
 import bekindrewind._
+import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import io.circe.Json
 import io.circe.syntax._
@@ -191,7 +193,7 @@ import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  recordingPath = Paths.get("vcr/example.json"),
+  storage = FileVcrStorage(Paths.get("vcr/example.json")),
   matcher = VcrMatcher.groupBy { req =>
     // This is just an example. Handle errors properly in real code.
     val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject).get
@@ -226,13 +228,14 @@ You can use the `shouldRecord` filter to choose which requests to record and whi
 
 ```scala
 import bekindrewind._
+import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import sttp.client3._
 import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  recordingPath = Paths.get("vcr/example.json"),
+  storage = FileVcrStorage(Paths.get("vcr/example.json")),
   matcher = VcrMatcher.default.withShouldRecord { req =>
     req.uri.getHost == "postman-echo.com"
   }
@@ -258,13 +261,14 @@ control, especially in a public repository.
 
 ```scala
 import bekindrewind._
+import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import sttp.client3._
 import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  recordingPath = Paths.get("vcr/example.json"),
+  storage = FileVcrStorage(Paths.get("vcr/example.json")),
   matcher = VcrMatcher.default.withTransformer { entry =>
     entry.copy(
       request = entry.request.copy(
@@ -293,7 +297,7 @@ amount of time.
 ```scala
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  recordingPath = Paths.get("vcr/example.json"),
+  storage = FileVcrStorage(Paths.get("vcr/example.json")),
   recordOptions = RecordOptions.default.copy(
     expiresAfter = Some(Duration.ofDays(90))
   )
@@ -310,6 +314,7 @@ You can combine multiple VcrMatchers with `append` (or the `:+` alias) like this
 
 ```scala
 import bekindrewind.VcrMatcher
+import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import io.circe.Json
 import io.circe.syntax._
@@ -328,7 +333,7 @@ val postmanEchoMatcher = VcrMatcher.groupBy { req =>
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  recordingPath = Paths.get("vcr/example.json"),
+  storage = FileVcrStorage(Paths.get("vcr/example.json")),
   matcher = ipifyMatcher :+ postmanEchoMatcher // Combines both matchers into one.
 )
 
