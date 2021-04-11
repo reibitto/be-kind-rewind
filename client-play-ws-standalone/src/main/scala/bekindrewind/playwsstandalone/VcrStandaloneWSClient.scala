@@ -1,7 +1,7 @@
 package bekindrewind.playwsstandalone
 
 import akka.stream.Materializer
-import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
+import bekindrewind.{ RecordOptions, VcrClient, VcrKey, VcrMatcher }
 import play.api.libs.ws.{ StandaloneWSClient, StandaloneWSRequest }
 
 import java.nio.file.Path
@@ -10,8 +10,8 @@ import scala.util.Try
 class VcrStandaloneWSClient(
   val underlyingClient: StandaloneWSClient,
   val recordingPath: Path,
-  val recordOptions: RecordOptions = RecordOptions.default,
-  val matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
+  val recordOptions: RecordOptions,
+  val matcher: VcrMatcher
 )(implicit val materializer: Materializer)
     extends StandaloneWSClient
     with VcrClient {
@@ -26,4 +26,14 @@ class VcrStandaloneWSClient(
     Try(save()).failed.foreach(_.printStackTrace())
     underlyingClient.close()
   }
+}
+
+object VcrStandaloneWSClient {
+  def apply(
+    underlyingClient: StandaloneWSClient,
+    recordingPath: Path,
+    recordOptions: RecordOptions = RecordOptions.default,
+    matcher: VcrMatcher = VcrMatcher.groupBy(r => VcrKey(r.method, r.uri))
+  )(implicit materializer: Materializer) =
+    new VcrStandaloneWSClient(underlyingClient, recordingPath, recordOptions, matcher)
 }

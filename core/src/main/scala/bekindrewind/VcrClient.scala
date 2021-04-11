@@ -26,8 +26,8 @@ trait VcrClient {
               Map.empty[VcrKey, StatefulVcrEntries]
 
             case _ =>
-              entries.entries.groupBy(rec => matcher.group(rec.request)).map { case (anyKey, entries) =>
-                anyKey -> StatefulVcrEntries.create(entries)
+              entries.entries.groupBy(rec => matcher.group(rec.request)).map { case (key, entries) =>
+                key -> StatefulVcrEntries.create(entries)
               }
           }
       }

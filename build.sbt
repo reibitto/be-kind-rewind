@@ -7,7 +7,7 @@ inThisBuild(
   List(
     organization := "com.github.reibitto",
     homepage := Some(url("https://github.com/reibitto/be-kind-rewind")),
-    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
+    licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0"))
   )
 )
 
@@ -67,7 +67,7 @@ lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   )
   .dependsOn(core)
 
-lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("client-play-standalone"))
+lazy val clientPlayStandalone = module("be-kind-rewind-play-ws-standalone", Some("client-play-ws-standalone"))
   .settings(
     fork := true,
     run / baseDirectory := file("."),
@@ -77,12 +77,12 @@ lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("c
   )
   .dependsOn(core)
 
-lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
+lazy val clientPlay = module("be-kind-rewind-play-ws", Some("client-play-ws"))
   .settings(
     fork := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
-      "com.typesafe.play" %% "play-ws" % "2.8.7"
+      "com.typesafe.play" %% "play-ws" % "2.8.8"
     )
   )
   .dependsOn(core)
