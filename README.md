@@ -18,23 +18,27 @@ Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.
 
 ### Minimal example (using `sttp`)
 
-Add the following dependency:
+Add the following dependencies:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-sttp" % "0.1.0"
+"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
 ```
+
+_(Note: All the examples below use JSON storage using Circe, but you can swap the codec module out for something else)_
 
 Then:
 
 ```scala
 import sttp.client3._
+import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"))
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec)
 )
 
 val request = basicRequest.get(uri"https://postman-echo.com/get?a=1")
@@ -56,6 +60,7 @@ Add the following dependency:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-play-ws-standalone" % "0.1.0"
+"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
 ```
 
 Then:
@@ -79,7 +84,7 @@ implicit val materializer = SystemMaterializer(system).materializer
 
 val client = VcrStandaloneWSClient(
   underlyingClient = StandaloneAhcWSClient(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"))
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec)
 )
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
@@ -101,6 +106,7 @@ Add the following dependency:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-play-ws" % "0.1.0"
+"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
 ```
 
 Then:
@@ -127,7 +133,7 @@ val wsClient: WSClient = ???
     
 val client = VcrWSClient(
   underlyingClient = wsClient,
-  storage = FileVcrStorage(Paths.get("vcr/example.json"))
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec)
 )
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
@@ -149,6 +155,7 @@ Add the following dependency:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-akka-http" % "0.1.0"
+"com.github.reibitto" %% "be-kind-rewind-codec-circe" % "0.1.0" // Optional
 ```
 
 Then:
@@ -157,13 +164,15 @@ Then:
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.HttpRequest
 import bekindrewind.akkahttp.VcrHttp
+import bekindrewind.codec.JsonCodec
+import bekindrewind.storage.FileVcrStorage
 import java.nio.file.Paths
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
 implicit val system = ActorSystem.create()
 
-val client  = VcrHttp.useClassicActorSystem(Paths.get("vcr/example.json"))
+val client  = VcrHttp.useClassicActorSystem(FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec))
 val request = HttpRequest(uri = "http://localhost:7777")
 
 // The first time you run this a real HTTP request will be sent. The next time you run it, the
@@ -184,6 +193,7 @@ write a custom matcher to accomplish this:
 
 ```scala
 import bekindrewind._
+import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import io.circe.Json
@@ -193,7 +203,7 @@ import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json")),
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
   matcher = VcrMatcher.groupBy { req =>
     // This is just an example. Handle errors properly in real code.
     val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject).get
@@ -228,6 +238,7 @@ You can use the `shouldRecord` filter to choose which requests to record and whi
 
 ```scala
 import bekindrewind._
+import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import sttp.client3._
@@ -235,7 +246,7 @@ import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json")),
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
   matcher = VcrMatcher.default.withShouldRecord { req =>
     req.uri.getHost == "postman-echo.com"
   }
@@ -261,6 +272,7 @@ control, especially in a public repository.
 
 ```scala
 import bekindrewind._
+import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import sttp.client3._
@@ -268,7 +280,7 @@ import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json")),
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
   matcher = VcrMatcher.default.withTransformer { entry =>
     entry.copy(
       request = entry.request.copy(
@@ -297,7 +309,7 @@ amount of time.
 ```scala
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json")),
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
   recordOptions = RecordOptions.default.copy(
     expiresAfter = Some(Duration.ofDays(90))
   )
@@ -314,6 +326,7 @@ You can combine multiple VcrMatchers with `append` (or the `:+` alias) like this
 
 ```scala
 import bekindrewind.VcrMatcher
+import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.FileVcrStorage
 import bekindrewind.sttpclient._
 import io.circe.Json
@@ -333,7 +346,7 @@ val postmanEchoMatcher = VcrMatcher.groupBy { req =>
 
 val vcrBackend = VcrBackend(
   underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json")),
+  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
   matcher = ipifyMatcher :+ postmanEchoMatcher // Combines both matchers into one.
 )
 
