@@ -12,7 +12,7 @@ final class InMemoryVcrStorage() extends VcrStorage {
 
   private val entriesRef: AtomicReference[VcrEntries] = new AtomicReference[VcrEntries]()
 
-  override def read(): Either[Throwable, VcrEntries] = entriesRef.getAcquire match {
+  override def read(): Either[Throwable, VcrEntries] = entriesRef.get() match {
     case null    => Left(new IllegalStateException("storage is empty"))
     case entries => Right(entries)
   }
