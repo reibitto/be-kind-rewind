@@ -56,7 +56,7 @@ vcrBackend.close()
 <details>
   <summary>Click to expand</summary>
 
-Add the following dependency:
+Add the following dependencies:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-play-standalone" % "0.1.0"
@@ -102,7 +102,7 @@ system.terminate()
 <details>
   <summary>Click to expand</summary>
 
-Add the following dependency:
+Add the following dependencies:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-play" % "0.1.0"
@@ -151,7 +151,7 @@ system.terminate()
 <details>
   <summary>Click to expand</summary>
 
-Add the following dependency:
+Add the following dependencies:
 
 ```scala
 "com.github.reibitto" %% "be-kind-rewind-akka-http" % "0.1.0"
@@ -389,6 +389,14 @@ And then pass `YamlCodec` to `FileVcrStorage`:
 
 ```scala
 FileVcrStorage(Paths.get("vcr/example.yml"), YamlCodec)
+```
+
+### Other
+
+If you want to know whether the HTTP response is a VCR replay, you can check the follow response header:
+
+```
+X-VCR-Cache: true
 ```
 
 ## Overview
