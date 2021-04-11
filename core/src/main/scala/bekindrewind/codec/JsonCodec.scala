@@ -7,7 +7,7 @@ import io.circe.syntax.EncoderOps
 import java.net.URI
 import scala.util.Try
 
-object CirceCodec extends Codec {
+object JsonCodec extends Codec {
   override def decode(text: String): Either[Throwable, VcrEntries] =
     for {
       json    <- io.circe.parser.parse(text)
