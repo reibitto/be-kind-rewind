@@ -7,7 +7,7 @@ import munit._
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file._
-import java.time.{Duration, OffsetDateTime}
+import java.time.{ Duration, OffsetDateTime }
 import scala.collection.immutable
 
 class VcrClientSpec extends FunSuite {
