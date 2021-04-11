@@ -15,6 +15,7 @@ lazy val root = project
   .in(file("."))
   .aggregate(
     core,
+    codecCirceJson,
     clientAkkaHttp,
     clientSttp,
     clientPlay,
@@ -47,14 +48,23 @@ lazy val core = module("be-kind-rewind", Some("core"))
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit"            % Version.munit % Test,
-      "org.scalameta" %% "munit-scalacheck" % Version.munit % Test,
-      "io.circe"      %% "circe-core"       % Version.circe,
-      "io.circe"      %% "circe-parser"     % Version.circe
+      "org.scalameta" %% "munit-scalacheck" % Version.munit % Test
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "bekindrewind"
   )
   .enablePlugins(BuildInfoPlugin)
+
+lazy val codecCirceJson = module("be-kind-rewind-codec-circe", Some("codec-circe"))
+  .settings(
+    fork := true,
+    run / baseDirectory := file("."),
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core"   % Version.circe,
+      "io.circe" %% "circe-parser" % Version.circe
+    )
+  )
+  .dependsOn(core)
 
 lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   .settings(
