@@ -1,7 +1,7 @@
 package bekindrewind.storage
 
 import bekindrewind.VcrEntries
-import bekindrewind.codec.{ JsonCodec, Codec }
+import bekindrewind.codec.{ Codec, JsonCodec }
 
 import java.nio.charset.{ Charset, StandardCharsets }
 import java.nio.file.{ Files, Path }
@@ -25,6 +25,6 @@ class FileVcrStorage(path: Path, codec: Codec, charset: Charset) extends VcrStor
 }
 
 object FileVcrStorage {
-  def apply(recordingPath: Path): FileVcrStorage =
-    new FileVcrStorage(recordingPath, JsonCodec, StandardCharsets.UTF_8)
+  def apply(recordingPath: Path, codec: Codec = JsonCodec, charset: Charset = StandardCharsets.UTF_8): FileVcrStorage =
+    new FileVcrStorage(recordingPath, codec, charset)
 }
