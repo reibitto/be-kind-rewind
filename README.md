@@ -59,7 +59,7 @@ vcrBackend.close()
 Add the following dependency:
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-play-ws-standalone" % "0.1.0"
+"com.github.reibitto" %% "be-kind-rewind-play-standalone" % "0.1.0"
 "com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
 ```
 
@@ -105,7 +105,7 @@ system.terminate()
 Add the following dependency:
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-play-ws" % "0.1.0"
+"com.github.reibitto" %% "be-kind-rewind-play" % "0.1.0"
 "com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
 ```
 
