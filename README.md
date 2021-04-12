@@ -12,8 +12,6 @@ The goal is to make integration tests fast, deterministic, and potentially elimi
 
 Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.com), [play-ws](https://github.com/playframework/play-ws), [akka-http](https://doc.akka.io/docs/akka-http/current/client-side/index.html)) with plans to support more (see [this issue](https://github.com/reibitto/be-kind-rewind/issues/4)).
 
-(***Note:*** *Be Kind Rewind hasn't been officially released yet. The first release will be coming very soon.*)
-
 ## Example usage
 
 ### Minimal example (using `sttp`)
