@@ -91,74 +91,70 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
     withMethod(method).execute()
 
   override def execute(): Future[Response] = {
-    val vcrRequest = VcrRequest(
-      req.method,
-      req.uri,
-      req.body.toString,
-      req.headers,
-      "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
-    )
+    implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
+    implicit val mat: Materializer            = owner.materializer
 
-    owner.findMatch(vcrRequest) match {
-      case Some(r) =>
-        Future.successful(
-          VcrWSResponse(
-            r.request.uri,
-            r.response.statusCode,
-            r.response.statusText,
-            r.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")),
-            r.response.body
-          )
-        )
+    for {
+      requestBodyString <- bodyAsString
+      vcrRequest         = VcrRequest(
+                             req.method,
+                             req.uri,
+                             requestBodyString,
+                             req.headers,
+                             "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
+                           )
+      response          <- owner.findMatch(vcrRequest) match {
+                             case Some(entry) =>
+                               Future.successful(
+                                 VcrWSResponse(
+                                   entry.request.uri,
+                                   entry.response.statusCode,
+                                   entry.response.statusText,
+                                   entry.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")),
+                                   entry.response.body
+                                 )
+                               )
 
-      case None =>
-        implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
-        implicit val mat: Materializer            = owner.materializer
+                             case None if owner.matcher.shouldRecord(vcrRequest) =>
+                               for {
+                                 res <- req.execute(method).map { res =>
+                                          val entry = VcrEntry(
+                                            VcrRequest(
+                                              req.method,
+                                              req.uri,
+                                              requestBodyString,
+                                              req.headers,
+                                              "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
+                                            ),
+                                            VcrResponse(
+                                              res.status,
+                                              res.statusText,
+                                              res.headers.map { case (k, v) =>
+                                                (k, v.toSeq)
+                                              },
+                                              res.body,
+                                              Some(res.contentType)
+                                            ),
+                                            OffsetDateTime.now
+                                          )
 
-        if (owner.matcher.shouldRecord(vcrRequest)) {
-          for {
-            requestBody <- req.body match {
-                             case EmptyBody          => Future.successful("")
-                             case InMemoryBody(ws)   => Future.successful(ws.utf8String)
-                             case SourceBody(source) => source.runFold("")(_ + _.utf8String)
+                                          owner.addNewEntry(entry)
+
+                                          res
+                                        }
+                               } yield res
+
+                             case None if owner.recordOptions.notRecordedThrowsErrors =>
+                               Future.failed(
+                                 new Exception(
+                                   s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
+                                 )
+                               )
+
+                             case None =>
+                               req.execute(method)
                            }
-            res         <- req.execute(method).map { res =>
-                             val entry = VcrEntry(
-                               VcrRequest(
-                                 req.method,
-                                 req.uri,
-                                 requestBody,
-                                 req.headers,
-                                 "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
-                               ),
-                               VcrResponse(
-                                 res.status,
-                                 res.statusText,
-                                 res.headers.map { case (k, v) =>
-                                   (k, v.toSeq)
-                                 },
-                                 res.body,
-                                 Some(res.contentType)
-                               ),
-                               OffsetDateTime.now
-                             )
-
-                             owner.addNewEntry(entry)
-
-                             res
-                           }
-          } yield res
-
-        } else if (owner.recordOptions.notRecordedThrowsErrors) {
-          Future.failed(
-            new Exception(
-              s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
-            )
-          )
-        } else {
-          req.execute(method)
-        }
-    }
+    } yield response
   }
 
   override def stream(): Future[Response] = req.stream()
@@ -181,4 +177,11 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
 
   override def put(body: Source[MultipartFormData.Part[Source[ByteString, _]], _]): Future[Response] =
     put[Source[MultipartFormData.Part[Source[ByteString, _]], _]](body)
+
+  private def bodyAsString(implicit materializer: Materializer): Future[String] =
+    req.body match {
+      case EmptyBody          => Future.successful("")
+      case InMemoryBody(ws)   => Future.successful(ws.utf8String)
+      case SourceBody(source) => source.runFold("")(_ + _.utf8String)
+    }
 }

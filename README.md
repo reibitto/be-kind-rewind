@@ -68,7 +68,9 @@ Then:
 ```scala
 import akka.actor.ActorSystem
 import akka.stream.SystemMaterializer
+import bekindrewind.codec.JsonCodec
 import bekindrewind.playwsstandalone.VcrStandaloneWSClient
+import bekindrewind.storage.FileVcrStorage
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import java.nio.file.Paths
 import scala.concurrent.Await
