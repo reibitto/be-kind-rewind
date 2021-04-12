@@ -7,7 +7,10 @@ inThisBuild(
   List(
     organization := "com.github.reibitto",
     homepage := Some(url("https://github.com/reibitto/be-kind-rewind")),
-    licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0"))
+    licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
+    developers := List(
+      Developer("reibitto", "reibitto", "reibitto@users.noreply.github.com", url("https://reibitto.github.io"))
+    )
   )
 )
 
