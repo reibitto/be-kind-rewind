@@ -2,7 +2,7 @@ import sbt.Keys._
 import sbt._
 
 object Build {
-  val Scala213Version = "2.13.5"
+  val Scala213Version = "2.13.6"
   val Scala212Version = "2.12.13"
 
   val BeKindRewindVersion = "0.1.0"
