@@ -13,7 +13,7 @@ object Build {
     val munit = "0.7.27"
 
     val akka     = "2.6.15"
-    val akkaHttp = "10.2.4"
+    val akkaHttp = "10.2.5"
   }
 
   lazy val ScalacOptions = Def.setting(
