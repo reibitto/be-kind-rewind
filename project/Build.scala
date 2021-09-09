@@ -8,11 +8,11 @@ object Build {
   val BeKindRewindVersion = "0.1.0"
 
   object Version {
-    val circe = "0.14.1"
-    val sttp  = "3.3.13"
-    val munit = "0.7.27"
+    val circe = "0.13.0"
+    val sttp  = "3.3.14"
+    val munit = "0.7.29"
 
-    val akka     = "2.6.15"
+    val akka     = "2.6.16"
     val akkaHttp = "10.2.6"
   }
 
