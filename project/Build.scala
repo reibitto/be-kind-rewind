@@ -9,7 +9,7 @@ object Build {
 
   object Version {
     val circe = "0.14.1"
-    val sttp  = "3.3.15"
+    val sttp  = "3.3.17"
     val munit = "0.7.29"
 
     val akka     = "2.6.16"
