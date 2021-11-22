@@ -12,7 +12,7 @@ object Build {
     val sttp  = "3.3.15"
     val munit = "0.7.29"
 
-    val akka     = "2.6.16"
+    val akka     = "2.6.17"
     val akkaHttp = "10.2.6"
   }
 
