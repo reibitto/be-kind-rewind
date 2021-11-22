@@ -2,17 +2,17 @@ import sbt.Keys._
 import sbt._
 
 object Build {
-  val Scala213Version = "2.13.6"
+  val Scala213Version = "2.13.7"
   val Scala212Version = "2.12.15"
 
   val BeKindRewindVersion = "0.1.0"
 
   object Version {
     val circe = "0.14.1"
-    val sttp  = "3.3.15"
+    val sttp  = "3.3.17"
     val munit = "0.7.29"
 
-    val akka     = "2.6.16"
+    val akka     = "2.6.17"
     val akkaHttp = "10.2.7"
   }
 
