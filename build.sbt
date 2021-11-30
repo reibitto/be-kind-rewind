@@ -97,7 +97,7 @@ lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("c
     fork := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
-      "com.typesafe.play" %% "play-ahc-ws-standalone" % "2.1.3"
+      "com.typesafe.play" %% "play-ahc-ws-standalone" % "2.1.5"
     )
   )
   .dependsOn(core)
