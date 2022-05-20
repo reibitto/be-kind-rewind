@@ -8,7 +8,7 @@ object Build {
   val BeKindRewindVersion = "0.1.0"
 
   object Version {
-    val circe = "0.14.1"
+    val circe = "0.14.2"
     val sttp  = "3.5.2"
     val munit = "0.7.29"
 
