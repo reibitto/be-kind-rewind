@@ -107,7 +107,7 @@ lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
     fork := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
-      "com.typesafe.play" %% "play-ws" % "2.8.15"
+      "com.typesafe.play" %% "play-ws" % "2.8.16"
     )
   )
   .dependsOn(core)
