@@ -3,8 +3,8 @@ package bekindrewind
 sealed trait VcrMatcher {
 
   /**
-   * Appends another VcrMatcher to this VcrMatcher. The specified VcrMatcher is attached to the end, meaning if the
-   * 1st VcrMatcher matches the request, the 2nd one
+   * Appends another VcrMatcher to this VcrMatcher. The specified VcrMatcher is attached to the end, meaning if the 1st
+   * VcrMatcher matches the request, the 2nd one
    */
   def append(other: VcrMatcher): VcrMatcher
 
@@ -24,8 +24,8 @@ sealed trait VcrMatcher {
   def shouldRecord(request: VcrRequest): Boolean = matcherFor(request).isDefined
 
   /**
-   * Transforms a VcrEntry with the transformer attached to this matcher. One usage for this is to filter sensitive
-   * data from a request/response.
+   * Transforms a VcrEntry with the transformer attached to this matcher. One usage for this is to filter sensitive data
+   * from a request/response.
    */
   def transform(entry: VcrEntry): VcrEntry
 
@@ -48,7 +48,8 @@ sealed trait VcrMatcher {
 object VcrMatcher {
 
   /**
-   * The default VcrMatcher which matches on HTTP method + URI. This does not match on the request body, HTTP headers, etc.
+   * The default VcrMatcher which matches on HTTP method + URI. This does not match on the request body, HTTP headers,
+   * etc.
    */
   def default: VcrMatcher = VcrMatcher.One(
     grouper = req => VcrKey(req.method, req.uri),

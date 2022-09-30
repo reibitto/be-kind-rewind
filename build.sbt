@@ -6,9 +6,9 @@ import sbtwelcome._
 inThisBuild(
   List(
     organization := "com.github.reibitto",
-    homepage := Some(url("https://github.com/reibitto/be-kind-rewind")),
-    licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
-    developers := List(
+    homepage     := Some(url("https://github.com/reibitto/be-kind-rewind")),
+    licenses     := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
+    developers   := List(
       Developer("reibitto", "reibitto", "reibitto@users.noreply.github.com", url("https://reibitto.github.io"))
     )
   )
@@ -26,10 +26,10 @@ lazy val root = project
     clientPlayStandalone
   )
   .settings(
-    name := "be-kind-rewind",
+    name        := "be-kind-rewind",
     addCommandAlias("fmt", "all root/scalafmtSbt root/scalafmtAll"),
     addCommandAlias("fmtCheck", "all root/scalafmtSbtCheck root/scalafmtCheckAll"),
-    logo :=
+    logo        :=
       s"""
          |
          | _____        _____ _       _    _____           _       _
@@ -48,20 +48,20 @@ lazy val root = project
 
 lazy val core = module("be-kind-rewind", Some("core"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit"            % Version.munit % Test,
       "org.scalameta" %% "munit-scalacheck" % Version.munit % Test
     ),
-    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
-    buildInfoPackage := "bekindrewind"
+    buildInfoKeys       := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoPackage    := "bekindrewind"
   )
   .enablePlugins(BuildInfoPlugin)
 
 lazy val codecCirceJson = module("be-kind-rewind-codec-circe-json", Some("codec-circe-json"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core"   % Version.circe,
@@ -72,7 +72,7 @@ lazy val codecCirceJson = module("be-kind-rewind-codec-circe-json", Some("codec-
 
 lazy val codecCirceYaml = module("be-kind-rewind-codec-circe-yaml", Some("codec-circe-yaml"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-yaml" % Version.circeYaml
@@ -82,7 +82,7 @@ lazy val codecCirceYaml = module("be-kind-rewind-codec-circe-yaml", Some("codec-
 
 lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %% "core"  % Version.sttp,
@@ -94,7 +94,7 @@ lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
 
 lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("client-play-standalone"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play-ahc-ws-standalone" % "2.1.3"
@@ -104,7 +104,7 @@ lazy val clientPlayStandalone = module("be-kind-rewind-play-standalone", Some("c
 
 lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play-ws" % "2.8.16"
@@ -114,7 +114,7 @@ lazy val clientPlay = module("be-kind-rewind-play", Some("client-play"))
 
 lazy val clientAkkaHttp = module("be-kind-rewind-akka-http", Some("client-akka-http"))
   .settings(
-    fork := true,
+    fork                := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-http"        % Version.akkaHttp,

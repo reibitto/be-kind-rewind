@@ -55,11 +55,10 @@ object Generators {
       "Warning"
     )
 
-  val vcrRequest: Gen[VcrRequest] = {
+  val vcrRequest: Gen[VcrRequest] =
     for {
       method <- method
       uri    <- uri
       body   <- Gen.asciiStr
     } yield VcrRequest(method, uri, body, Map.empty, "HTTP/1.1")
-  }
 }
