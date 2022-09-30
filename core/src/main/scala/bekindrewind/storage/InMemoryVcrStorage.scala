@@ -5,8 +5,7 @@ import bekindrewind.VcrEntries
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Intended for testing purpose.
- * Do not use in production.
+ * Intended for testing purpose. Do not use in production.
  */
 final class InMemoryVcrStorage() extends VcrStorage {
 

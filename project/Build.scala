@@ -46,36 +46,34 @@ object Build {
       "-Ywarn-extra-implicit"          // Warn when more than one implicit parameter section is defined.
     ) ++
       Seq(
-        "-Ywarn-unused:imports",       // Warn if an import selector is not referenced.
-        "-Ywarn-unused:locals",        // Warn if a local definition is unused.
-        "-Ywarn-unused:privates",      // Warn if a private member is unused.
-        "-Ywarn-unused:implicits"      // Warn if an implicit parameter is unused.
+        "-Ywarn-unused:imports",  // Warn if an import selector is not referenced.
+        "-Ywarn-unused:locals",   // Warn if a local definition is unused.
+        "-Ywarn-unused:privates", // Warn if a private member is unused.
+        "-Ywarn-unused:implicits" // Warn if an implicit parameter is unused.
       ).filter(_ => shouldWarnForUnusedCode)
   )
 
   def defaultSettings(projectName: String) =
     Seq(
-      name := projectName,
+      name                           := projectName,
       Test / javaOptions += "-Duser.timezone=UTC",
-      scalacOptions := ScalacOptions.value,
-      ThisBuild / scalaVersion := Scala213Version,
+      scalacOptions                  := ScalacOptions.value,
+      ThisBuild / scalaVersion       := Scala213Version,
       ThisBuild / crossScalaVersions := Seq(Scala213Version, Scala212Version),
       libraryDependencies ++= Plugins.BaseCompilerPlugins,
       incOptions ~= (_.withLogRecompileOnMacro(false)),
-      autoAPIMappings := true,
-      resolvers := Resolvers,
-      testFrameworks := Seq(new TestFramework("munit.Framework")),
-      Test / fork := true,
-      Test / logBuffered := false
+      autoAPIMappings                := true,
+      resolvers                      := Resolvers,
+      testFrameworks                 := Seq(new TestFramework("munit.Framework")),
+      Test / fork                    := true,
+      Test / logBuffered             := false
     )
 
-  lazy val Resolvers = Seq(
-    // Order of resolvers affects resolution time. More general purpose repositories should come first.
-    Resolver.sonatypeRepo("releases"),
-    Resolver.typesafeRepo("releases"),
-    Resolver.jcenterRepo,
-    Resolver.sonatypeRepo("snapshots")
-  )
+  // Order of resolvers affects resolution time. More general purpose repositories should come first.
+  lazy val Resolvers =
+    Resolver.sonatypeOssRepos("releases") ++
+      Seq(Resolver.typesafeRepo("releases"), Resolver.jcenterRepo) ++
+      Resolver.sonatypeOssRepos("snapshots")
 
   def compilerFlag(key: String, default: Boolean): Boolean = {
     val flag = sys.props.get(key).orElse {

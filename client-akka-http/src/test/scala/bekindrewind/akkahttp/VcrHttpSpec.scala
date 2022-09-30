@@ -19,12 +19,11 @@ class VcrHttpSpec extends FunSuite {
 
     val binaryEntity    = HttpEntity.apply(Array[Byte](1, 2, 3))
     val jsonEntity      = HttpEntity(ContentTypes.`application/json`, """{"a":1}""")
-    val stubSendRequest = (_: HttpRequest) => {
+    val stubSendRequest = (_: HttpRequest) =>
       Future.successful(HttpResponse(entity = counter.incrementAndGet() match {
         case 1 => binaryEntity
         case 2 => jsonEntity
       }))
-    }
 
     val storage   = new InMemoryVcrStorage()
     val vcrClient = VcrHttp.create(
