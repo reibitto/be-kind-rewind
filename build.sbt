@@ -75,7 +75,7 @@ lazy val codecCirceYaml = module("be-kind-rewind-codec-circe-yaml", Some("codec-
     fork := true,
     run / baseDirectory := file("."),
     libraryDependencies ++= Seq(
-      "io.circe" %% "circe-yaml" % Version.circe
+      "io.circe" %% "circe-yaml" % Version.circeYaml
     )
   )
   .dependsOn(core)
