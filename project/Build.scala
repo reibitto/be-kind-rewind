@@ -11,7 +11,7 @@ object Build {
   object Version {
     val circe = "0.14.3"
 
-    val circeYaml = "0.14.1"
+    val circeYaml = "0.14.2"
 
     val sttp = "3.5.2"
 
