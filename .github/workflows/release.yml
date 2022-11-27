@@ -1,8 +1,8 @@
 name: Release
 on:
   push:
-    branches: [master, main]
-    tags: ["*"]
+    branches: [ master, main ]
+    tags: [ "*" ]
 jobs:
   publish:
     runs-on: ubuntu-20.04
