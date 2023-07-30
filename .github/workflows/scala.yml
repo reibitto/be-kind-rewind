@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scala: [ 2.13.10, 2.12.18 ]
+        scala: [ 2.13.11, 2.12.18 ]
         java: [ openjdk@1.11.0, openjdk@1.17.0 ]
     runs-on: ubuntu-latest
     steps:
