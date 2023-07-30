@@ -4,12 +4,12 @@ import sbt._
 object Build {
   val Scala213Version = "2.13.11"
 
-  val Scala212Version = "2.12.17"
+  val Scala212Version = "2.12.18"
 
   val BeKindRewindVersion = "0.1.0"
 
   object Version {
-    val circe = "0.14.3"
+    val circe = "0.14.5"
 
     val circeYaml = "0.14.2"
 
