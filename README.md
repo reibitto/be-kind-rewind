@@ -1,6 +1,6 @@
 # Be Kind Rewind ⏪
 
-![Scala CI](https://github.com/reibitto/be-kind-rewind/workflows/Scala%20CI/badge.svg)
+![Scala CI](https://github.com/reibitto/be-kind-rewind/actions/workflows/scala.yml/badge.svg)
 
 *A VCR testing library for Scala*
 
