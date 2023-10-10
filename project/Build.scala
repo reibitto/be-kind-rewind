@@ -9,7 +9,7 @@ object Build {
   val BeKindRewindVersion = "0.1.0"
 
   object Version {
-    val circe = "0.14.5"
+    val circe = "0.14.6"
 
     val circeYaml = "0.14.2"
 
