@@ -13,7 +13,7 @@ object Build {
 
     val circeYaml = "0.14.2"
 
-    val sttp = "3.8.16"
+    val sttp = "3.9.2"
 
     val munit = "0.7.29"
 
