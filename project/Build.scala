@@ -15,7 +15,7 @@ object Build {
 
     val sttp = "3.8.16"
 
-    val munit = "0.7.29"
+    val munit = "1.3.5"
 
     val akka = "2.6.20"
 
