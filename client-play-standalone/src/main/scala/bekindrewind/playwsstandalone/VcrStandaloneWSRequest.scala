@@ -1,6 +1,5 @@
 package bekindrewind.playwsstandalone
 
-import org.apache.pekko.util.ByteString
 import play.api.libs.ws._
 
 import java.net.URI
@@ -99,14 +98,7 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
           owner,
           req,
           () => req.execute(method),
-          entry =>
-            VcrStandaloneWSResponse(
-              req.uri,
-              entry.response.statusCode,
-              entry.response.statusText,
-              PlayVcr.replayHeaders(entry),
-              ByteString(entry.response.bodyBytes)
-            )
+          entry => VcrStandaloneWSResponse.replay(entry, req.uri)
         )(owner.materializer)
     }
 

@@ -13,11 +13,14 @@ import scala.concurrent.{ ExecutionContext, Future }
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
-/** Logic shared between the play-ws and play-ws-standalone clients. */
-private[bekindrewind] object PlayVcr {
+/**
+ * Logic shared between the play-ws and play-ws-standalone clients. Public so that adapters for custom WS request types
+ * can record and replay exactly like the built-in clients.
+ */
+object PlayVcr {
 
   // AsyncHttpClient (the implementation behind play-ws) only speaks HTTP/1.1.
-  private val httpVersion = Some("HTTP/1.1")
+  val httpVersion: Option[String] = Some("HTTP/1.1")
 
   /**
    * Runs the request through the VCR. Streamed request bodies must be buffered with [[bufferSourceBody]] first, since
@@ -66,6 +69,7 @@ private[bekindrewind] object PlayVcr {
       case _                  => None
     }
 
+  /** The recorded response headers plus the `X-VCR-Cache` header, looked up case-insensitively. */
   def replayHeaders(entry: VcrEntry): Map[String, Seq[String]] =
     caseInsensitive(entry.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")))
 
@@ -73,6 +77,7 @@ private[bekindrewind] object PlayVcr {
   def caseInsensitive(headers: Map[String, Seq[String]]): Map[String, Seq[String]] =
     TreeMap(headers.toSeq: _*)(Ordering.comparatorToOrdering(String.CASE_INSENSITIVE_ORDER))
 
+  /** Parses the `Set-Cookie` headers. */
   def cookies(headers: Map[String, Seq[String]]): Seq[WSCookie] =
     for {
       header <- caseInsensitive(headers).getOrElse("Set-Cookie", Nil)
@@ -98,7 +103,8 @@ private[bekindrewind] object PlayVcr {
     body.decodeString(charset.getOrElse(StandardCharsets.UTF_8))
   }
 
-  private def toVcrResponse(res: StandaloneWSResponse): VcrResponse =
+  /** Records a response, keeping the exact body bytes. */
+  def toVcrResponse(res: StandaloneWSResponse): VcrResponse =
     VcrResponse.fromBytes(
       res.status,
       res.statusText,

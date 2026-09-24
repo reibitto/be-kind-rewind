@@ -6,6 +6,7 @@ import bekindrewind.testkit.{ VcrTestContext, VcrTestSupport }
 import munit.{ FunSuite, Location, TestOptions }
 
 import scala.concurrent.Future
+import scala.util.Try
 import scala.util.control.NonFatal
 
 /**
@@ -29,34 +30,45 @@ trait VcrSuite extends FunSuite with VcrTestSupport {
   final class VcrFixture[C <: VcrClient] private[VcrSuite] (create: VcrTestContext => C) {
     def test(name: String)(body: C => Any)(implicit loc: Location): Unit = test(new TestOptions(name))(body)
 
+    // Test bodies can be synchronous or return a future, so the client is saved once either completes.
     def test(options: TestOptions)(body: C => Any)(implicit loc: Location): Unit =
-      VcrSuite.this.test(options)(withVcr(options.name)(create)(body))
+      VcrSuite.this.test(options) {
+        val client = create(vcrContext(options.name))
+        saveOnFailure(client)(body(client)) match {
+          case future: Future[_] => saveOnCompletion(client, future)
+          case result            =>
+            client.save()
+            result
+        }
+      }
   }
 
   /**
-   * Creates a VCR client for the named test and saves it once `use` completes (including returned futures). Whether
-   * `use` succeeded determines whether unused entries are reported.
+   * Creates a VCR client for the named test and saves it once `use` completes. Whether `use` succeeded determines
+   * whether unused entries are reported. Use [[withVcrAsync]] if `use` returns a future.
    */
   def withVcr[C <: VcrClient, A](testName: String)(create: VcrTestContext => C)(use: C => A): A = {
     val client = create(vcrContext(testName))
-
-    val result =
-      try use(client)
-      catch {
-        case NonFatal(e) =>
-          try client.save(succeeded = false)
-          catch { case NonFatal(saveError) => e.addSuppressed(saveError) }
-          throw e
-      }
-
-    result match {
-      case future: Future[_] =>
-        future.transform { outcome =>
-          scala.util.Try(client.save(outcome.isSuccess)).flatMap(_ => outcome)
-        }(munitExecutionContext).asInstanceOf[A]
-      case _                 =>
-        client.save()
-        result
-    }
+    val result = saveOnFailure(client)(use(client))
+    client.save()
+    result
   }
+
+  /** Like [[withVcr]], but saves the client once the returned future completes. */
+  def withVcrAsync[C <: VcrClient, A](testName: String)(create: VcrTestContext => C)(use: C => Future[A]): Future[A] = {
+    val client = create(vcrContext(testName))
+    saveOnCompletion(client, saveOnFailure(client)(use(client)))
+  }
+
+  private def saveOnFailure[A](client: VcrClient)(use: => A): A =
+    try use
+    catch {
+      case NonFatal(e) =>
+        try client.save(succeeded = false)
+        catch { case NonFatal(saveError) => e.addSuppressed(saveError) }
+        throw e
+    }
+
+  private def saveOnCompletion[A](client: VcrClient, future: Future[A]): Future[A] =
+    future.transform(outcome => Try(client.save(outcome.isSuccess)).flatMap(_ => outcome))(munitExecutionContext)
 }

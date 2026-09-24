@@ -12,7 +12,7 @@ The goal is to make integration tests fast, deterministic, and potentially elimi
 
 Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.com) 3 and 4, Java's [HttpClient](https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.html), [play-ws](https://github.com/playframework/play-ws), [pekko-http](https://pekko.apache.org/docs/pekko-http/current/client-side/index.html)) and integrates with [munit](https://scalameta.org/munit), [ScalaTest](https://www.scalatest.org) and [zio-test](https://zio.dev/reference/test).
 
-Requires Scala 2.13 and Java 11+.
+Requires Scala 2.13 or 3.3+, and Java 11+.
 
 ## Modules
 
@@ -31,6 +31,7 @@ All modules are published under `"com.github.reibitto" %% "<module>" % "0.2.0"`.
 | `be-kind-rewind-zio-test` | zio-test integration |
 | `be-kind-rewind-codec-circe-json` | JSON recordings (included by the test framework modules) |
 | `be-kind-rewind-codec-circe-yaml` | YAML recordings |
+| `be-kind-rewind-xml` | Matching on XML request bodies |
 
 ## Quick start
 
@@ -75,11 +76,24 @@ All integrations have the same settings, which can be overridden in your suite:
 
 | Setting | Default |
 | --- | --- |
-| `vcrDirectory` | `src/test/resources/vcr` |
+| `vcrDirectory` | `src/test/resources/vcr` in the suite's module (see below) |
 | `vcrLayout` | `VcrLayout.PerTest` (see [Recording layout](#recording-layout)) |
 | `vcrCodec` | `JsonCodec` (use `YamlCodec` from `be-kind-rewind-codec-circe-yaml` for YAML) |
 | `vcrSuiteName` | The suite's class name |
-| `vcrRecordOptions` | `RecordOptions.default`, with the record mode taken from `VCR_RECORD_MODE` if set |
+| `vcrDefaultRecordMode` | `RecordMode.NewEpisodes`. `VCR_RECORD_MODE` overrides it if set |
+| `vcrRecordOptions` | `RecordOptions.default` with the record mode above |
+
+The module is found from where the suite's compiled classes are (`<module>/target/...` for sbt and Maven,
+`<module>/build/classes/...` for Gradle), so recordings end up in the right place even when tests run from another
+directory. For other layouts (such as sbt 2, which keeps every module's output under the root `target`), set the
+module directory with a system property, e.g. in sbt:
+`Test / javaOptions += s"-Dvcr.base.directory=${baseDirectory.value}"`.
+
+To make CI never send real requests, have suites only replay unless asked to record:
+
+```scala
+override def vcrDefaultRecordMode = RecordMode.ReplayOnly
+```
 
 The context passed to the client factory (`ctx` in the examples) contains the test's `storage`, `recordOptions`,
 `testName`, `suiteName` and recording `path`.
@@ -98,7 +112,8 @@ class UserApiSpec extends VcrSuite {
 }
 ```
 
-`withVcr(testName)(create)(use)` is also available for creating a client inside any test.
+`withVcr(testName)(create)(use)` (and `withVcrAsync` for code returning a `Future`) is also available for creating a
+client inside any test.
 
 ### ScalaTest
 
@@ -159,8 +174,61 @@ override def vcrLayout = VcrLayout.PerSuite
 ```
 
 Every entry is labelled with the test that recorded it, and in either layout a test only sees and replaces its own
-entries. So running a subset of tests (e.g. with `testOnly`) or running tests in parallel works the same either way.
+entries (even if two test names map to the same file name).
+
+### File names
+
+Per-test files are named after the test by default. Override `vcrFileNaming` to change that:
+
+```scala
+override def vcrFileNaming = VcrFileNaming.ByTestName()                  // gets-a-user.json (default)
+override def vcrFileNaming = VcrFileNaming.ByHash()                      // 3f1c9a0b7d2e4f68.json
+override def vcrFileNaming = VcrFileNaming.Custom(_.testName.stripPrefix("The API should "))
+```
+
+Whichever you choose, names are made safe for every OS: only letters, digits, `.`, `_` and `-` are kept, Windows device
+names such as `CON` are avoided, and names (including the extension) never exceed `maxLength` (100 characters by
+default, which leaves room for the checkout and suite directories within Windows' 260 character path limit). Longer
+names are truncated and get a short hash of the full name, so they stay unique.
+
+To rename existing recordings after changing the naming (they're matched to tests by the test names stored in them):
+
+```
+sbt "Test/runMain bekindrewind.codec.VcrTool rename src/test/resources/vcr json --naming by-hash --dry-run"
+``` So running a subset of tests (e.g. with `testOnly`) or running tests in parallel works the same either way.
 One file per test is easier to navigate and less prone to merge conflicts. One file per suite means fewer files.
+
+### Clients created outside of tests (dependency injection)
+
+If your HTTP clients are created once and shared by every test (for example by a dependency injection framework),
+create them with the suite's `vcrSession.storage` and mix in the session integration. `vcrSession.storage` always refers
+to the running test, no matter which thread or fiber makes the request:
+
+```scala
+// ScalaTest (also AsyncVcrSessionSuite)
+class PaymentsSpec extends AnyFunSuite with VcrSessionSuite {
+  val client = VcrBackend(backend, vcrSession.storage) // or pass vcrSession.storage to your DI module
+
+  test("creates a payment") { ... }
+}
+
+// munit
+class PaymentsSpec extends VcrSessionSuite { ... }
+
+// zio-test
+object PaymentsSpec extends ZIOSpecDefault with VcrSessionSpec { ... }
+```
+
+Every test in the suite then gets its own recording, and the record options come from the suite. Since there's only one
+running test per suite, its tests run one at a time. zio-test names tests after their labels below the root suite (e.g.
+`payments / creates a payment`) and numbers duplicate names.
+
+Requests made while no test is running fail, except those the matcher doesn't record (see
+[`shouldRecord`](#only-record-a-subset-of-http-requests)), which are sent as usual.
+
+For HTTP libraries that aren't supported out of the box, `vcrSession.client(matcher)` returns a `VcrClient` to build an
+adapter with (see `VcrClient.resolve`). For play-ws request types of your own, `PlayVcr` has the helpers the built-in
+Play clients use.
 
 ### Changing the record mode without code changes
 
@@ -367,9 +435,27 @@ Prebuilt matchers:
 | `VcrMatcher.methodUriAndHeaders("Accept", ...)` | method + URI + the specified headers (names are case-insensitive) |
 | `VcrMatcher.identity` | the entire request |
 | `JsonMatchers.methodUriAndJsonBody("timestamp", ...)` | method + URI + JSON body, ignoring the specified fields at any depth as well as formatting and field order (in `be-kind-rewind-codec-circe-json`) |
+| `XmlMatchers.methodUriAndXmlBody(ignoredElements, ignoredAttributes)` | method + URI + XML body, ignoring the specified elements and attributes at any depth as well as whitespace and comments (in `be-kind-rewind-xml`) |
 
 `JsonMatchers.methodUriAndJsonBody` is useful for request bodies with values that change every run, such as timestamps
 or nonces. Without it, a real HTTP request would be sent every run because every request would look new.
+
+`JsonMatchers.methodUriAndJsonBody(ignoredFields, parseNestedJson = true)` also parses JSON inside string fields, for
+APIs that wrap one JSON request in another.
+
+### Ignoring parts of requests
+
+These can be added to any matcher. They only affect matching, so the recordings keep the original values:
+
+```scala
+JsonMatchers
+  .methodUriAndJsonBody("timestamp")
+  .ignoreQueryParams("nonce", "sign")
+  .mapUri(uri => URI.create(uri.toString.replaceAll("/orders/[0-9]+", "/orders/ID")))
+  .normalizeForMatching(req => req.copy(headers = req.headers - "X-Request-Id"))
+```
+
+To remove values from the recordings as well, see [Filtering sensitive data](#filtering-sensitive-data).
 
 ### Custom matchers
 
@@ -416,9 +502,15 @@ Redaction replaces values with `REDACTED` before recordings are saved:
 val matcher = VcrMatcher.default
   .redactHeaders("Authorization", "X-API-Key")           // request and response headers, case-insensitive
   .redactQueryParams("api_key")                          // query parameters
+  .redactValues(apiKey)                                  // known secrets, wherever they appear
   .mapRequest(JsonRedaction.request("password"))         // JSON request body fields (be-kind-rewind-codec-circe-json)
   .mapResponse(JsonRedaction.response("accessToken"))    // JSON response body fields
 ```
+
+The values of redacted headers and query parameters are also replaced wherever else they appear in the entry: in
+bodies, URIs and other headers, of both the request and the response. That covers servers that echo requests back, or
+error messages that include an API key. Only values of at least 8 characters are replaced elsewhere, since shorter ones
+are unlikely to be secrets. Binary (base64) bodies are left as is.
 
 Request redaction is also applied to live requests before they are matched, so a redacted query parameter still
 matches on replay.
@@ -462,7 +554,9 @@ the test framework integrations). Otherwise it behaves like `Warn`.
 ## Recordings
 
 Recordings are human-readable. Bodies are stored as text when possible and as base64 for binary content, so responses
-are replayed byte for byte:
+are replayed byte for byte. Text in a charset other than UTF-8 (such as Shift_JIS, from the `Content-Type` header) is
+stored as text too, with the charset as its `bodyEncoding`. In YAML, multi-line bodies are written as literal blocks unless that would change them
+(for example CRLF line endings or trailing spaces, which YAML parsers and editors don't preserve):
 
 ```json
 {
@@ -509,10 +603,22 @@ FileVcrStorage(Paths.get("vcr/example.yml"), YamlCodec)
 
 Other formats can be supported by implementing `Codec`, and other kinds of storage by implementing `VcrStorage`.
 
+### Converting recordings
+
+Recordings can be converted between formats without re-recording them, with `VcrConverter` (`convert`, `convertFile`
+and `convertDirectory`) or from the command line (requires `be-kind-rewind-codec-circe-yaml`):
+
+```
+sbt "Test/runMain bekindrewind.codec.VcrTool convert src/test/resources/vcr yaml json --delete-sources"
+```
+
+Every recording is read before any is written, so nothing changes if one of them can't be read. Converting to the same
+format (e.g. `yaml yaml`) rewrites recordings in the current output format.
+
 ## Migrating from 0.1.0
 
 - The `akka-http` module was replaced by `be-kind-rewind-pekko-http` (package `bekindrewind.pekkohttp`), and the Play
-  modules now use Play 3 (Pekko). Scala 2.12 is no longer supported.
+  modules now use Play 3 (Pekko). Scala 3 is supported, and Scala 2.12 no longer is.
 - `RecordOptions(overwriteAll = true)` is now `RecordOptions.default.mode(RecordMode.RecordAll)`.
 - `VcrStorage.read()` returns `Either[Throwable, Option[VcrEntries]]`, and `Codec` has a new `fileExtension` member.
 - `VcrRequest.httpVersion` is now optional, and `VcrRequest`/`VcrResponse` have a new `bodyEncoding` field.

@@ -36,7 +36,7 @@ class VcrHttpClient(
   override def send[T](request: HttpRequest, handler: BodyHandler[T]): HttpResponse[T] =
     try sendAsync(request, handler).get()
     catch {
-      case e: ExecutionException if e.getCause != null => throw e.getCause
+      case e: ExecutionException => throw Option(e.getCause).getOrElse(e)
     }
 
   override def sendAsync[T](request: HttpRequest, handler: BodyHandler[T]): CompletableFuture[HttpResponse[T]] =
@@ -155,7 +155,10 @@ object VcrHttpClient {
         .expectContinue(request.expectContinue())
       request.timeout().ifPresent { t => builder.timeout(t); () }
       request.version().ifPresent { v => builder.version(v); () }
-      request.headers().map().forEach((name, values) => values.forEach { value => builder.header(name, value); () })
+      for {
+        (name, values) <- request.headers().map().asScala
+        value          <- values.asScala
+      } builder.header(name, value)
       builder.build()
     }
 

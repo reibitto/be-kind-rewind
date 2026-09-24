@@ -32,3 +32,16 @@ final case class VcrWSResponse(
 
   override def json: JsValue = Json.parse(body)
 }
+
+object VcrWSResponse {
+
+  /** The replayed response for a recorded entry, as returned for `uri`. */
+  def replay(entry: bekindrewind.VcrEntry, uri: URI): VcrWSResponse =
+    VcrWSResponse(
+      uri,
+      entry.response.statusCode,
+      entry.response.statusText,
+      bekindrewind.playwsstandalone.PlayVcr.replayHeaders(entry),
+      ByteString(entry.response.bodyBytes)
+    )
+}

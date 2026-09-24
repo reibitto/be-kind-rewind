@@ -8,6 +8,15 @@ object RequestKeys {
   /** The URI with its query parameters sorted by name, so that parameter order doesn't affect matching. */
   def sortedQueryParams(uri: URI): URI = mapQueryParams(uri)(_.sortBy(_._1))
 
+  /** The URI without the specified query parameters (names are compared after URL-decoding). */
+  def withoutQueryParams(uri: URI, names: String*): URI = {
+    val nameSet = names.toSet
+    mapQueryParams(uri)(_.filterNot { case (key, _) => nameSet.contains(decode(key)) })
+  }
+
+  private[bekindrewind] def decode(key: String): String =
+    scala.util.Try(java.net.URLDecoder.decode(key, java.nio.charset.StandardCharsets.UTF_8)).getOrElse(key)
+
   /** The values of the specified headers, keyed by lowercase header name. Missing headers are left out. */
   def headers(request: VcrRequest, names: String*): Map[String, Seq[String]] = {
     val lowerNames = names.map(_.toLowerCase).toSet
@@ -30,7 +39,8 @@ object RequestKeys {
         }
         val newQuery = f(params).map { case (key, value) => key + value.fold("")("=" + _) }.mkString("&")
         val full     = uri.toString
-        val start    = full.indexOf('?') + 1
-        URI.create(full.substring(0, start) + newQuery + full.substring(start + query.length))
+        val start    = full.indexOf('?')
+        val rest     = full.substring(start + 1 + query.length)
+        URI.create(full.substring(0, start) + (if (newQuery.isEmpty) "" else s"?$newQuery") + rest)
     }
 }

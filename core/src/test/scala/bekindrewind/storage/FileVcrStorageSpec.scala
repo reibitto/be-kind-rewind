@@ -8,6 +8,7 @@ import munit._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{ Files, Path }
 import java.util.concurrent.atomic.AtomicReference
+import scala.jdk.CollectionConverters._
 
 class FileVcrStorageSpec extends FunSuite {
 
@@ -30,7 +31,7 @@ class FileVcrStorageSpec extends FunSuite {
 
   private val tempDir = FunFixture[Path](
     _ => Files.createTempDirectory("vcr-storage"),
-    dir => Files.walk(dir).sorted(java.util.Comparator.reverseOrder()).forEach(p => Files.delete(p))
+    dir => Files.walk(dir).iterator().asScala.toVector.sorted.reverse.foreach(Files.delete)
   )
 
   tempDir.test("Missing file reads as empty") { dir =>

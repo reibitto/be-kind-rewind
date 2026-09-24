@@ -5,13 +5,14 @@ import sbtwelcome._
 
 inThisBuild(
   List(
-    organization := "com.github.reibitto",
-    homepage     := Some(url("https://github.com/reibitto/be-kind-rewind")),
-    licenses     := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
-    developers   := List(
+    organization       := "com.github.reibitto",
+    homepage           := Some(url("https://github.com/reibitto/be-kind-rewind")),
+    licenses           := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
+    developers         := List(
       Developer("reibitto", "reibitto", "reibitto@users.noreply.github.com", url("https://reibitto.github.io"))
     ),
-    scalaVersion := Build.ScalaVersion
+    scalaVersion       := Build.Scala213Version,
+    crossScalaVersions := Seq(Build.Scala213Version, Build.Scala3Version)
   )
 )
 
@@ -21,6 +22,7 @@ lazy val root = project
     core,
     codecCirceJson,
     codecCirceYaml,
+    xml,
     clientPekkoHttp,
     clientSttp,
     clientSttp4,
@@ -80,6 +82,12 @@ lazy val codecCirceYaml = module("be-kind-rewind-codec-circe-yaml", Some("codec-
     )
   )
   .dependsOn(core % "compile->compile;test->test", codecCirceJson)
+
+lazy val xml = module("be-kind-rewind-xml", Some("xml"))
+  .settings(
+    libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % Version.scalaXml
+  )
+  .dependsOn(core % "compile->compile;test->test")
 
 lazy val clientSttp = module("be-kind-rewind-sttp", Some("client-sttp"))
   .settings(

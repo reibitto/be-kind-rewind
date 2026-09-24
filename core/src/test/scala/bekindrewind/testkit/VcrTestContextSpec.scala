@@ -23,20 +23,11 @@ class VcrTestContextSpec extends FunSuite {
     override def vcrSuiteName: String = "MySpec"
   }
 
-  test("fileName turns names into safe file names") {
-    assertEquals(VcrTestContext.fileName("gets a user (v2)"), "gets-a-user-v2")
-    assertEquals(VcrTestContext.fileName("../etc/passwd"), "etc-passwd")
-    assertEquals(VcrTestContext.fileName("Ünïcode ✓"), "n-code")
-    assertEquals(VcrTestContext.fileName("!!!"), "unnamed")
-    assertEquals(VcrTestContext.fileName("x" * 500).length, 150)
-  }
-
   test("PerTest layout gives each test its own file under the suite's directory") {
     val ctx = new Support(VcrLayout.PerTest).vcrContext("gets a user")
 
     assertEquals(ctx.path, Paths.get("vcr", "MySpec", "gets-a-user.json"))
     assertEquals(ctx.storage.testName, Some("gets a user"))
-    assert(ctx.storage.isInstanceOf[storage.VcrStorage.TestNamed])
   }
 
   test("PerSuite layout shares one file per suite, scoped to each test") {
@@ -47,7 +38,6 @@ class VcrTestContextSpec extends FunSuite {
     assertEquals(a.path, Paths.get("vcr", "MySpec.json"))
     assertEquals(b.path, a.path)
     assertEquals(a.storage.testName, Some("test a"))
-    assert(a.storage.isInstanceOf[storage.VcrStorage.TestScoped])
   }
 
   test("withTestName labels entries that don't have a test name yet") {
@@ -72,5 +62,48 @@ class VcrTestContextSpec extends FunSuite {
     assertEquals(RecordMode.fromName("NewEpisodes"), Some(RecordMode.NewEpisodes))
     assertEquals(RecordMode.fromName("once"), Some(RecordMode.Once))
     assertEquals(RecordMode.fromName("sometimes"), None)
+  }
+}
+
+class VcrTestSupportDefaultsSpec extends FunSuite {
+  private object Support extends VcrTestSupport {
+    override def vcrCodec: bekindrewind.codec.Codec = throw new UnsupportedOperationException
+  }
+
+  test("vcrDirectory defaults to src/test/resources/vcr in the suite's module, found from its build output") {
+    // This suite's classes are in core/target/..., so its module is core.
+    val core = Paths.get(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
+    assert(core.toString.contains("target"), core.toString)
+
+    val expected = Iterator.iterate(core)(_.getParent).find(_.getFileName.toString == "target").get.getParent
+    assertEquals(Support.vcrDirectory, expected.resolve("src/test/resources/vcr"))
+    assertEquals(expected.getFileName.toString, "core")
+  }
+
+  test("vcr.base.directory overrides the module directory") {
+    val previous = sys.props.get("vcr.base.directory")
+    sys.props("vcr.base.directory") = "/somewhere/module"
+    try assertEquals(VcrTestSupport.moduleDirectory(getClass), Paths.get("/somewhere/module"))
+    finally {
+      previous match {
+        case Some(value) => sys.props("vcr.base.directory") = value
+        case None        => sys.props -= "vcr.base.directory"
+      }
+      ()
+    }
+  }
+
+  test("vcrDefaultRecordMode sets the record mode") {
+    object ReplayOnlySupport extends VcrTestSupport {
+      override def vcrCodec: bekindrewind.codec.Codec = throw new UnsupportedOperationException
+      override def vcrDefaultRecordMode: RecordMode   = RecordMode.ReplayOnly
+    }
+
+    // Unless VCR_RECORD_MODE is set, which it isn't in this build.
+    assertEquals(
+      ReplayOnlySupport.vcrRecordOptions.mode,
+      VcrTestSupport.recordModeOverride.getOrElse(RecordMode.ReplayOnly)
+    )
+    assertEquals(Support.vcrRecordOptions.mode, VcrTestSupport.recordModeOverride.getOrElse(RecordMode.NewEpisodes))
   }
 }

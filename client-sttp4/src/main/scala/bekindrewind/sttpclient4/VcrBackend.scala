@@ -7,7 +7,7 @@ import sttp.client4._
 import sttp.client4.internal.{ BodyFromResponseAs, SttpFile }
 import sttp.client4.wrappers.DelegateBackend
 import sttp.client4.ws.{ GotAWebSocketException, NotAWebSocketException }
-import sttp.model.{ Header, HttpVersion, ResponseMetadata, StatusCode }
+import sttp.model.{ Header, HeaderNames, HttpVersion, ResponseMetadata, StatusCode }
 import sttp.monad.{ IdentityMonad, MonadError }
 import sttp.monad.syntax._
 import sttp.shared.Identity
@@ -85,7 +85,9 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
                   VcrResponse.fromBytes(
                     response.code.code,
                     response.statusText,
-                    toPlainHeaders(response.headers),
+                    toPlainHeaders(
+                      recordedHeaders(response.headers, decompressed = request.options.decompressResponseBody)
+                    ),
                     response.body._2.getOrElse(Array.emptyByteArray),
                     response.contentType,
                     None // sttp doesn't expose the protocol version of responses
@@ -160,6 +162,17 @@ object VcrBackend {
         Some((request.body(ByteArrayBody(bytes, ct)), bytes))
       case FileBody(f, _)            => Some((request, f.readAsByteArray()))
       case _                         => None
+    }
+
+  /**
+   * The response headers worth recording. HTTP/2 pseudo-headers (such as `:status`) aren't real headers, and when sttp
+   * decompressed the body, `Content-Encoding` and `Content-Length` describe the compressed body rather than the
+   * recorded one.
+   */
+  private def recordedHeaders(headers: Seq[Header], decompressed: Boolean): Seq[Header] =
+    headers.filterNot { header =>
+      header.name.startsWith(":") ||
+      (decompressed && (header.is(HeaderNames.ContentEncoding) || header.is(HeaderNames.ContentLength)))
     }
 
   private def showHttpVersion(version: HttpVersion): String =

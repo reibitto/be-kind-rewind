@@ -55,3 +55,31 @@ class JsonHelpersSpec extends FunSuite {
     )
   }
 }
+
+class JsonNestedSpec extends FunSuite {
+  import bekindrewind.testing.TestData._
+
+  private def post(body: String) = request(method = "POST", body = body)
+
+  test("parseNestedJson matches JSON inside string fields regardless of formatting, ignoring nested fields") {
+    val matcher = JsonMatchers.methodUriAndJsonBody(Set("Date"), parseNestedJson = true)
+
+    val a = post("""{"path":"/charge","body":"{\"Amount\":100,\"Date\":\"2024-01-01\"}"}""")
+    val b = post("""{"path":"/charge","body":"{ \"Date\": \"2025-12-31\", \"Amount\": 100 }"}""")
+    val c = post("""{"path":"/charge","body":"{\"Amount\":200,\"Date\":\"2024-01-01\"}"}""")
+
+    assertEquals(matcher.group(a), matcher.group(b))
+    assertNotEquals(matcher.group(a), matcher.group(c))
+    assertNotEquals(
+      JsonMatchers.methodUriAndJsonBody("Date").group(a),
+      JsonMatchers.methodUriAndJsonBody("Date").group(b)
+    )
+  }
+
+  test("parseNestedJson leaves strings that aren't JSON objects or arrays alone") {
+    val matcher = JsonMatchers.methodUriAndJsonBody(Set.empty[String], parseNestedJson = true)
+
+    assertNotEquals(matcher.group(post("""{"n":"123"}""")), matcher.group(post("""{"n":123}""")))
+    assertEquals(matcher.group(post("""{"s":"{not json"}""")), matcher.group(post("""{"s":"{not json"}""")))
+  }
+}

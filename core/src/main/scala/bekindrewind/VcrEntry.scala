@@ -37,7 +37,7 @@ object VcrRequest {
     headers: Map[String, Seq[String]],
     httpVersion: Option[String]
   ): VcrRequest = {
-    val (encoded, encoding) = BodyEncoding.encode(body)
+    val (encoded, encoding) = BodyEncoding.encode(body, BodyEncoding.charsetOf(headers))
     VcrRequest(method, uri, encoded, headers, httpVersion, encoding)
   }
 }
@@ -69,16 +69,23 @@ object VcrResponse {
     contentType: Option[String],
     httpVersion: Option[String]
   ): VcrResponse = {
-    val (encoded, encoding) = BodyEncoding.encode(body)
+    val (encoded, encoding) =
+      BodyEncoding.encode(body, contentType.flatMap(BodyEncoding.charsetOf).orElse(BodyEncoding.charsetOf(headers)))
     VcrResponse(statusCode, statusText, headers, encoded, contentType, httpVersion, encoding)
   }
 }
 
 final case class VcrEntries(entries: Vector[VcrEntry], version: String)
 
-final case class StatefulVcrEntries(entries: Vector[VcrEntry], currentIndex: AtomicInteger)
+/**
+ * A group of equivalent recorded entries and how many of them have been replayed.
+ *
+ * @param positions
+ *   Where each entry is in the recording.
+ */
+final case class StatefulVcrEntries(entries: Vector[VcrEntry], currentIndex: AtomicInteger, positions: Vector[Int])
 
 object StatefulVcrEntries {
-  def create(entries: Vector[VcrEntry]): StatefulVcrEntries =
-    StatefulVcrEntries(entries, new AtomicInteger(0))
+  def create(entries: Vector[VcrEntry], positions: Vector[Int]): StatefulVcrEntries =
+    StatefulVcrEntries(entries, new AtomicInteger(0), positions)
 }

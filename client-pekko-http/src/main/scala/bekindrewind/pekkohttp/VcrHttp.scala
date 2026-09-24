@@ -71,7 +71,10 @@ object VcrHttp {
         .getOrElse(StatusCodes.custom(vcrResponse.statusCode, vcrResponse.statusText)),
       headers = toPekkoHeaders(vcrResponse.headers + (VcrClient.vcrCacheHeaderName -> Seq("true"))),
       entity = HttpEntity(contentType, vcrResponse.bodyBytes),
-      protocol = vcrResponse.httpVersion.orElse(vcrRequest.httpVersion).fold(HttpProtocols.`HTTP/1.1`)(HttpProtocol(_))
+      protocol = vcrResponse.httpVersion
+        .orElse(vcrRequest.httpVersion)
+        .flatMap(HttpProtocols.getForKey)
+        .getOrElse(HttpProtocols.`HTTP/1.1`)
     )
   }
 

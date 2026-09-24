@@ -63,6 +63,15 @@ final class TestHttpServer private (server: HttpServer) extends AutoCloseable {
     respondBytes(ex, 200, body, contentType)
   }
 
+  route("/gzip") { ex =>
+    val compressed = new java.io.ByteArrayOutputStream()
+    val gzip       = new java.util.zip.GZIPOutputStream(compressed)
+    gzip.write("""{"compressed":true}""".getBytes(StandardCharsets.UTF_8))
+    gzip.close()
+    ex.getResponseHeaders.add("Content-Encoding", "gzip")
+    respondBytes(ex, 200, compressed.toByteArray, "application/json")
+  }
+
   route("/binary")(ex => respondBytes(ex, 200, TestHttpServer.binaryBody, "image/png"))
 
   route("/json")(ex => respond(ex, 200, """{"hello":"world","unicode":"日本語"}""", "application/json"))

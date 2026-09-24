@@ -109,3 +109,46 @@ class YamlCodecOutputSpec extends FunSuite {
     assert(!encoded.trim.startsWith("{"), encoded)
   }
 }
+
+class YamlCodecFormatSpec extends FunSuite {
+  test("Fields keep their order, headers are sorted, and multi-line bodies are literal blocks") {
+    val request = TestData
+      .request(method = "POST", body = "line 1\nline 2\n")
+      .copy(headers = Map("X-B" -> Seq("b"), "Content-Type" -> Seq("text/plain"), "accept" -> Seq("x")))
+    val entry   = TestData.entry(request, TestData.response("x" * 200)).copy(testName = Some("my test"))
+
+    val expected =
+      s"""entries:
+         |- testName: my test
+         |  request:
+         |    method: POST
+         |    uri: https://example.com/foo.json
+         |    body: |
+         |      line 1
+         |      line 2
+         |    headers:
+         |      accept: x
+         |      Content-Type: text/plain
+         |      X-B: b
+         |    httpVersion: HTTP/1.1
+         |  response:
+         |    statusCode: 200
+         |    statusText: OK
+         |    body: ${"x" * 200}
+         |    contentType: application/json
+         |  recordedAt: '2100-05-06T12:34:56.789Z'
+         |version: 0.2.0
+         |""".stripMargin
+
+    val encoded = YamlCodec.encode(VcrEntries(Vector(entry), "0.2.0"))
+    assertEquals(encoded, expected)
+    assertEquals(YamlCodec.decode(encoded), Right(VcrEntries(Vector(entry), "0.2.0")))
+  }
+
+  test("Bodies that can't round-trip as literal blocks are quoted") {
+    for (body <- Seq("crlf\r\nline\r\n", "trailing space \nline", "\tindented\nline")) {
+      val entries = VcrEntries(Vector(TestData.entry(TestData.request(body = body))), "0.2.0")
+      assertEquals(YamlCodec.decode(YamlCodec.encode(entries)), Right(entries), body)
+    }
+  }
+}

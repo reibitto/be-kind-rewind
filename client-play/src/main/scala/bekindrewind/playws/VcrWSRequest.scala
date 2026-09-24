@@ -55,6 +55,8 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
 
   override def withCookies(cookies: WSCookie*): VcrWSRequest = req.withCookies(cookies: _*)
 
+  override def addCookies(cookies: WSCookie*): VcrWSRequest = req.addCookies(cookies: _*)
+
   override def withFollowRedirects(follow: Boolean): VcrWSRequest = req.withFollowRedirects(follow)
 
   override def withRequestTimeout(timeout: Duration): VcrWSRequest = req.withRequestTimeout(timeout)
@@ -99,14 +101,7 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
           owner,
           req,
           () => req.execute(method),
-          entry =>
-            VcrWSResponse(
-              req.uri,
-              entry.response.statusCode,
-              entry.response.statusText,
-              PlayVcr.replayHeaders(entry),
-              ByteString(entry.response.bodyBytes)
-            )
+          entry => VcrWSResponse.replay(entry, req.uri)
         )(owner.materializer)
     }
 

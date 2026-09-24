@@ -23,3 +23,16 @@ final case class VcrStandaloneWSResponse(
 
   override def bodyAsSource: Source[ByteString, _] = Source.single(bodyAsBytes)
 }
+
+object VcrStandaloneWSResponse {
+
+  /** The replayed response for a recorded entry, as returned for `uri`. */
+  def replay(entry: bekindrewind.VcrEntry, uri: URI): VcrStandaloneWSResponse =
+    VcrStandaloneWSResponse(
+      uri,
+      entry.response.statusCode,
+      entry.response.statusText,
+      PlayVcr.replayHeaders(entry),
+      ByteString(entry.response.bodyBytes)
+    )
+}

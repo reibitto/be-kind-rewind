@@ -85,4 +85,36 @@ class RequestKeysSpec extends FunSuite {
 
     assertEquals(matcher.transform(entry(response = response("0"))).response.body, "012")
   }
+
+  test("withoutQueryParams removes parameters and the question mark when none are left") {
+    assertEquals(
+      RequestKeys.withoutQueryParams(URI.create("https://a.com/p?sign=x&a=1&nonce=2#f"), "sign", "nonce"),
+      URI.create("https://a.com/p?a=1#f")
+    )
+    assertEquals(
+      RequestKeys.withoutQueryParams(URI.create("https://a.com/p?sign=x"), "sign"),
+      URI.create("https://a.com/p")
+    )
+  }
+
+  test("ignoreQueryParams affects matching only, not what's recorded") {
+    val matcher  = VcrMatcher.default.ignoreQueryParams("nonce")
+    val recorded = request(uri = "https://a.com/p?a=1&nonce=123")
+
+    assertEquals(matcher.group(recorded), matcher.group(request(uri = "https://a.com/p?a=1&nonce=456")))
+    assertNotEquals(matcher.group(recorded), matcher.group(request(uri = "https://a.com/p?a=2&nonce=123")))
+    assertEquals(matcher.transform(entry(recorded)).request.uri, recorded.uri)
+  }
+
+  test("mapUri affects matching only, and survives withGrouper") {
+    val matcher = VcrMatcher.default
+      .mapUri(uri => URI.create(uri.toString.replaceAll("/orders/[0-9]+", "/orders/ID")))
+      .withGrouper(r => VcrKey(r.uri))
+
+    assertEquals(
+      matcher.group(request(uri = "https://a.com/orders/1")),
+      matcher.group(request(uri = "https://a.com/orders/2"))
+    )
+    assertEquals(matcher.transform(entry(request(uri = "https://a.com/orders/1"))).request.uri.getPath, "/orders/1")
+  }
 }

@@ -24,7 +24,14 @@ trait VcrStorage {
    * For storage shared by several tests (such as one file per suite): only the specified test's entries are read, and
    * writing replaces only that test's entries, leaving the others as they are.
    */
-  def scopedToTest(testName: String): VcrStorage = new VcrStorage.TestScoped(this, testName)
+  def scopedToTest(testName: String): VcrStorage = new VcrStorage.TestScoped(this, testName, includeUnlabeled = false)
+
+  /**
+   * Like [[scopedToTest]], but entries without a test name are treated as the test's own. For storage that normally
+   * belongs to one test, where other tests' entries only show up if names collide.
+   */
+  def scopedToTestIncludingUnlabeled(testName: String): VcrStorage =
+    new VcrStorage.TestScoped(this, testName, includeUnlabeled = true)
 }
 
 object VcrStorage {
@@ -41,10 +48,11 @@ object VcrStorage {
   }
 
   /** Access is synchronized on the underlying storage, so tests sharing it can run in parallel. */
-  final class TestScoped(underlying: VcrStorage, name: String) extends VcrStorage {
+  final class TestScoped(underlying: VcrStorage, name: String, includeUnlabeled: Boolean) extends VcrStorage {
     override def testName: Option[String] = Some(name)
 
-    private def belongs(entry: VcrEntry): Boolean = entry.testName.contains(name)
+    private def belongs(entry: VcrEntry): Boolean =
+      entry.testName.contains(name) || (includeUnlabeled && entry.testName.isEmpty)
 
     override def read(): Either[Throwable, Option[VcrEntries]] =
       underlying.synchronized(underlying.read()).map(_.map(e => e.copy(entries = e.entries.filter(belongs))))

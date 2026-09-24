@@ -1,6 +1,6 @@
 package bekindrewind.json
 
-import bekindrewind.{ BodyEncoding, Redaction, VcrRequest, VcrResponse }
+import bekindrewind.{ Redaction, VcrRequest, VcrResponse }
 import io.circe.Json
 
 /**
@@ -16,12 +16,12 @@ import io.circe.Json
 object JsonRedaction {
   def request(fields: String*): VcrRequest => VcrRequest = {
     val fieldSet = fields.toSet
-    req => if (req.bodyEncoding == BodyEncoding.Text) req.copy(body = redact(req.body, fieldSet)) else req
+    req => if (req.bodyEncoding.isText) req.copy(body = redact(req.body, fieldSet)) else req
   }
 
   def response(fields: String*): VcrResponse => VcrResponse = {
     val fieldSet = fields.toSet
-    res => if (res.bodyEncoding == BodyEncoding.Text) res.copy(body = redact(res.body, fieldSet)) else res
+    res => if (res.bodyEncoding.isText) res.copy(body = redact(res.body, fieldSet)) else res
   }
 
   /** Redacts the fields if the body is JSON containing any of them. Other bodies are returned unchanged. */

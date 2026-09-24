@@ -67,3 +67,38 @@ class VcrSuitePerSuiteSpec extends VcrSuite {
     assertEquals(recorded, Vector(Some("test b") -> "2"))
   }
 }
+
+class VcrSuiteAsyncSpec extends VcrSuite {
+  override val vcrDirectory: java.nio.file.Path = java.nio.file.Files.createTempDirectory("vcr-munit-async")
+  override def vcrRecordOptions: RecordOptions  = RecordOptions.default
+
+  private val server = TestHttpServer.start()
+  private val http   = HttpClient.newHttpClient()
+
+  override def afterAll(): Unit = server.close()
+
+  private def create(ctx: VcrTestContext) = VcrHttpClient(http, ctx.storage, ctx.recordOptions)
+
+  private def getAsync(client: HttpClient) =
+    scala.jdk.FutureConverters
+      .CompletionStageOps(
+        client.sendAsync(HttpRequest.newBuilder(server.uri("/counter")).build(), BodyHandlers.ofString())
+      )
+      .asScala
+
+  test("withVcrAsync saves once the future completes, so a later client replays it") {
+    implicit val ec: scala.concurrent.ExecutionContext = munitExecutionContext
+
+    for {
+      recorded <- withVcrAsync("async")(create)(getAsync)
+      replayed <- withVcrAsync("async")(create)(getAsync)
+    } yield {
+      assertEquals(replayed.body(), recorded.body())
+      assertEquals(replayed.headers().firstValue(VcrClient.vcrCacheHeaderName).orElse(""), "true")
+    }
+  }
+
+  vcr(create).test("fixture tests can return futures") { client =>
+    getAsync(client).map(response => assertEquals(response.statusCode(), 200))(munitExecutionContext)
+  }
+}

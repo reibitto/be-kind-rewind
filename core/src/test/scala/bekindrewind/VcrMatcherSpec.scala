@@ -69,9 +69,14 @@ class VcrMatcherSpec extends ScalaCheckSuite {
     val b = VcrMatcher.identity
     val c = VcrMatcher.groupBy(_.uri)
 
-    assertEquals(((a :+ b) :+ c).asInstanceOf[VcrMatcher.Many].matchers.size, 3)
-    assertEquals((a :+ (b :+ c)).asInstanceOf[VcrMatcher.Many].matchers.size, 3)
-    assertEquals(((a :+ b) :+ (b :+ c)).asInstanceOf[VcrMatcher.Many].matchers.size, 4)
+    def size(matcher: VcrMatcher) = matcher match {
+      case VcrMatcher.Many(matchers) => matchers.size
+      case _: VcrMatcher.One         => 1
+    }
+
+    assertEquals(size((a :+ b) :+ c), 3)
+    assertEquals(size(a :+ (b :+ c)), 3)
+    assertEquals(size((a :+ b) :+ (b :+ c)), 4)
   }
 
   test("Combined matchers use the grouping of the matcher that accepted the request") {
