@@ -153,3 +153,9 @@ lazy val testZio = module("be-kind-rewind-zio-test", Some("test-zio"))
 def module(projectId: String, moduleFile: Option[String] = None): Project =
   Project(id = projectId, base = file(moduleFile.getOrElse(projectId)))
     .settings(Build.defaultSettings(projectId))
+
+ThisBuild / publishTo := {
+  val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
+  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+  else localStaging.value
+}
