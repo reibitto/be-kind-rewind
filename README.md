@@ -10,394 +10,514 @@ Be Kind Rewind is a VCR testing library for Scala, similar to the popular [vcr](
 
 The goal is to make integration tests fast, deterministic, and potentially eliminate the need for mocks and fakes completely for HTTP requests.
 
-Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.com), [play-ws](https://github.com/playframework/play-ws), [akka-http](https://doc.akka.io/docs/akka-http/current/client-side/index.html)) with plans to support more (see [this issue](https://github.com/reibitto/be-kind-rewind/issues/4)).
+Be Kind Rewind supports multiple HTTP clients ([sttp](https://sttp.softwaremill.com) 3 and 4, Java's [HttpClient](https://docs.oracle.com/en/java/javase/21/docs/api/java.net.http/java/net/http/HttpClient.html), [play-ws](https://github.com/playframework/play-ws), [pekko-http](https://pekko.apache.org/docs/pekko-http/current/client-side/index.html)) and integrates with [munit](https://scalameta.org/munit), [ScalaTest](https://www.scalatest.org) and [zio-test](https://zio.dev/reference/test).
 
-## Example usage
+Requires Scala 2.13 and Java 11+.
 
-### Minimal example (using `sttp`)
+## Modules
 
-Add the following dependencies:
+All modules are published under `"com.github.reibitto" %% "<module>" % "0.2.0"`.
+
+| Module | Description |
+| --- | --- |
+| `be-kind-rewind-sttp` | [sttp client3](https://sttp.softwaremill.com/en/stable/) backend |
+| `be-kind-rewind-sttp4` | [sttp client4](https://sttp.softwaremill.com/en/latest/) backend |
+| `be-kind-rewind-java-http` | `java.net.http.HttpClient` |
+| `be-kind-rewind-play` | play-ws (`WSClient`) |
+| `be-kind-rewind-play-standalone` | play-ws-standalone (`StandaloneWSClient`) |
+| `be-kind-rewind-pekko-http` | pekko-http |
+| `be-kind-rewind-munit` | munit integration |
+| `be-kind-rewind-scalatest` | ScalaTest integration |
+| `be-kind-rewind-zio-test` | zio-test integration |
+| `be-kind-rewind-codec-circe-json` | JSON recordings (included by the test framework modules) |
+| `be-kind-rewind-codec-circe-yaml` | YAML recordings |
+
+## Quick start
+
+The easiest way to use Be Kind Rewind is through one of the test framework integrations. Each test gets its own VCR
+client and its own recording file.
+
+Add the dependencies for your HTTP client and test framework (sttp and munit in this example):
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-sttp" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-sttp"  % "0.2.0" % Test
+"com.github.reibitto" %% "be-kind-rewind-munit" % "0.2.0" % Test
 ```
-
-_(See the [Codecs](#codecs) section if you want to use a different codec, such as for YAML)_
 
 Then:
 
 ```scala
+import bekindrewind.munit.VcrSuite
+import bekindrewind.sttpclient.VcrBackend
 import sttp.client3._
+
+class UserApiSpec extends VcrSuite {
+  val backend = HttpClientSyncBackend()
+
+  val vcrBackend = vcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions))
+
+  // The first time you run this a real HTTP request will be sent and recorded to
+  // src/test/resources/vcr/UserApiSpec/gets-a-user.json. The next time you run it, the
+  // recorded response will be played back instead.
+  vcrBackend.test("gets a user") { backend =>
+    val response = basicRequest.get(uri"https://postman-echo.com/get?user=1").send(backend)
+    assert(response.is200)
+  }
+}
+```
+
+The VCR client is saved when the test ends. It isn't closed, so one underlying HTTP client can be shared by the whole
+suite.
+
+## Test framework integration
+
+All integrations have the same settings, which can be overridden in your suite:
+
+| Setting | Default |
+| --- | --- |
+| `vcrDirectory` | `src/test/resources/vcr` |
+| `vcrLayout` | `VcrLayout.PerTest` (see [Recording layout](#recording-layout)) |
+| `vcrCodec` | `JsonCodec` (use `YamlCodec` from `be-kind-rewind-codec-circe-yaml` for YAML) |
+| `vcrSuiteName` | The suite's class name |
+| `vcrRecordOptions` | `RecordOptions.default`, with the record mode taken from `VCR_RECORD_MODE` if set |
+
+The context passed to the client factory (`ctx` in the examples) contains the test's `storage`, `recordOptions`,
+`testName`, `suiteName` and recording `path`.
+
+### munit
+
+```scala
+"com.github.reibitto" %% "be-kind-rewind-munit" % "0.2.0" % Test
+```
+
+```scala
+class UserApiSpec extends VcrSuite {
+  val vcrBackend = vcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions))
+
+  vcrBackend.test("gets a user") { backend => ... }
+}
+```
+
+`withVcr(testName)(create)(use)` is also available for creating a client inside any test.
+
+### ScalaTest
+
+```scala
+"com.github.reibitto" %% "be-kind-rewind-scalatest" % "0.2.0" % Test
+```
+
+Mix in `VcrTestSuite` (or `AsyncVcrTestSuite` for async suites) and wrap the test body with `withVcr`:
+
+```scala
+import bekindrewind.scalatest.VcrTestSuite
+import org.scalatest.funsuite.AnyFunSuite
+
+class UserApiSpec extends AnyFunSuite with VcrTestSuite {
+  test("gets a user") {
+    withVcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend =>
+      ...
+    }
+  }
+}
+```
+
+Put the test's assertions inside `withVcr`, since whether the block succeeds determines how
+[unused entries](#unused-entries) are handled. In async suites, call `withVcr` at the start of the test rather than
+inside a callback.
+
+### zio-test
+
+```scala
+"com.github.reibitto" %% "be-kind-rewind-zio-test" % "0.2.0" % Test
+```
+
+```scala
+import bekindrewind.ziotest.VcrSpec
+import zio._
+import zio.test._
+
+object UserApiSpec extends ZIOSpecDefault with VcrSpec {
+  def spec = suite("UserApi")(
+    vcrTest("gets a user")(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend =>
+      ZIO.attempt(basicRequest.get(uri"https://postman-echo.com/get").send(backend)).map { response =>
+        assertTrue(response.is200)
+      }
+    }
+  )
+}
+```
+
+`withVcr(testName)(create)(use)` is also available.
+
+### Recording layout
+
+By default each test is recorded to its own file: `<vcrDirectory>/<suite>/<test>.json`. To keep all of a suite's tests
+in one file instead (`<vcrDirectory>/<suite>.json`), override the layout:
+
+```scala
+override def vcrLayout = VcrLayout.PerSuite
+```
+
+Every entry is labelled with the test that recorded it, and in either layout a test only sees and replaces its own
+entries. So running a subset of tests (e.g. with `testOnly`) or running tests in parallel works the same either way.
+One file per test is easier to navigate and less prone to merge conflicts. One file per suite means fewer files.
+
+### Changing the record mode without code changes
+
+The `VCR_RECORD_MODE` environment variable (or the `vcr.record.mode` system property) sets the
+[record mode](#record-modes) for all suites. For example, to make sure CI never sends real requests:
+
+```
+VCR_RECORD_MODE=replay-only sbt test
+```
+
+Or to re-record everything:
+
+```
+VCR_RECORD_MODE=record-all sbt test
+```
+
+## Using an HTTP client directly
+
+The VCR clients can also be used without a test framework. The recording is written when the client is closed (or when
+`save()` is called).
+
+### sttp (client3)
+
+```scala
+"com.github.reibitto" %% "be-kind-rewind-sttp" % "0.2.0"
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.2.0"
+```
+
+```scala
 import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.FileVcrStorage
-import bekindrewind.sttpclient._
+import bekindrewind.sttpclient.VcrBackend
+import sttp.client3._
 import java.nio.file.Paths
 
 val vcrBackend = VcrBackend(
-  underlyingClient = HttpURLConnectionBackend(),
+  underlyingClient = HttpClientSyncBackend(),
   storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec)
 )
 
-val request = basicRequest.get(uri"https://postman-echo.com/get?a=1")
+basicRequest.get(uri"https://postman-echo.com/get?a=1").send(vcrBackend)
 
-// The first time you run this a real HTTP request will be sent. The next time you run it, the
-// recorded response will be played back instead.
-request.send(vcrBackend)
-
-// The recorded VCR file gets written on close
 vcrBackend.close()
 ```
 
-### Minimal example (using `play-ws-standalone`)
-
 <details>
-  <summary>Click to expand</summary>
-
-Add the following dependencies:
+  <summary>sttp (client4)</summary>
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-play-standalone" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-sttp4" % "0.2.0"
 ```
 
-Then:
+```scala
+import bekindrewind.sttpclient4.{ VcrBackend, VcrSettings }
+import sttp.client4._
+
+val vcrBackend = VcrBackend(
+  DefaultSyncBackend(),
+  VcrSettings(storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec))
+)
+
+basicRequest.get(uri"https://postman-echo.com/get?a=1").send(vcrBackend)
+
+vcrBackend.close()
+```
+
+Sync, async, streaming and WebSocket backends are supported. WebSocket requests are passed through without being
+recorded.
+</details>
+
+<details>
+  <summary>Java HttpClient</summary>
 
 ```scala
-import akka.actor.ActorSystem
-import akka.stream.SystemMaterializer
-import bekindrewind.codec.JsonCodec
+"com.github.reibitto" %% "be-kind-rewind-java-http" % "0.2.0"
+```
+
+`VcrHttpClient` extends `java.net.http.HttpClient`, so it can be passed to any code that expects one.
+
+```scala
+import bekindrewind.javahttp.VcrHttpClient
+import java.net.URI
+import java.net.http.{ HttpClient, HttpRequest, HttpResponse }
+
+val client = VcrHttpClient(HttpClient.newHttpClient(), FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec))
+
+client.send(HttpRequest.newBuilder(URI.create("https://postman-echo.com/get?a=1")).build(), HttpResponse.BodyHandlers.ofString())
+
+client.close()
+```
+
+`send` and `sendAsync` work with any `BodyHandler`, including streaming ones such as `ofInputStream`.
+</details>
+
+<details>
+  <summary>play-ws-standalone</summary>
+
+```scala
+"com.github.reibitto" %% "be-kind-rewind-play-standalone" % "0.2.0"
+```
+
+```scala
 import bekindrewind.playwsstandalone.VcrStandaloneWSClient
-import bekindrewind.storage.FileVcrStorage
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.{ Materializer, SystemMaterializer }
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import java.nio.file.Paths
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-// Create Akka system for thread and streaming management
-implicit val system = ActorSystem()
-system.registerOnTermination {
-  System.exit(0)
-}
-
-implicit val materializer = SystemMaterializer(system).materializer
+implicit val system: ActorSystem           = ActorSystem()
+implicit val materializer: Materializer = SystemMaterializer(system).materializer
 
 val client = VcrStandaloneWSClient(
   underlyingClient = StandaloneAhcWSClient(),
   storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec)
 )
 
-// The first time you run this a real HTTP request will be sent. The next time you run it, the
-// recorded response will be played back instead.
 Await.result(client.url("https://postman-echo.com/get?a=1").get(), 30.seconds)
 
-// The recorded VCR file gets written on close
 client.close()
 system.terminate()
 ```
 </details>
 
-### Minimal example (using `play-ws`)
-
 <details>
-  <summary>Click to expand</summary>
-
-Add the following dependencies:
+  <summary>play-ws</summary>
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-play" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-play" % "0.2.0"
 ```
 
-Then:
-
 ```scala
-import akka.actor.ActorSystem
-import akka.stream.SystemMaterializer
-import bekindrewind.playws._
+import bekindrewind.playws.VcrWSClient
 import play.api.libs.ws.WSClient
-import java.nio.file.Paths
-import scala.concurrent.Await
-import scala.concurrent.duration._
-
-// Create Akka system for thread and streaming management
-implicit val system = ActorSystem()
-system.registerOnTermination {
-  System.exit(0)
-}
-
-implicit val materializer = SystemMaterializer(system).materializer
 
 // Use the WSClient injected by Play
 val wsClient: WSClient = ???
-    
+
 val client = VcrWSClient(
   underlyingClient = wsClient,
   storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec)
 )
 
-// The first time you run this a real HTTP request will be sent. The next time you run it, the
-// recorded response will be played back instead.
 Await.result(client.url("https://postman-echo.com/get?a=1").get(), 30.seconds)
 
-// The recorded VCR file gets written on close
 client.close()
-system.terminate()
 ```
 </details>
-
-### Minimal example (using `akka-http`)
 
 <details>
-  <summary>Click to expand</summary>
-
-Add the following dependencies:
+  <summary>pekko-http</summary>
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-akka-http" % "0.1.0"
-"com.github.reibitto" %% "be-kind-rewind-codec-circe-json" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-pekko-http" % "0.2.0"
 ```
 
-Then:
-
 ```scala
-import akka.actor.ActorSystem
-import akka.http.scaladsl.model.HttpRequest
-import bekindrewind.akkahttp.VcrHttp
-import bekindrewind.codec.JsonCodec
-import bekindrewind.storage.FileVcrStorage
-import java.nio.file.Paths
-import scala.concurrent.Await
-import scala.concurrent.duration._
+import bekindrewind.pekkohttp.VcrHttp
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.scaladsl.model.HttpRequest
 
-implicit val system = ActorSystem.create()
+implicit val system: ActorSystem = ActorSystem()
 
-val client  = VcrHttp.useClassicActorSystem(FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec))
-val request = HttpRequest(uri = "http://localhost:7777")
+val client = VcrHttp.useClassicActorSystem(FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec))
 
-// The first time you run this a real HTTP request will be sent. The next time you run it, the
-// recorded response will be played back instead.
-Await.result(client.send(request), 30.seconds)
+Await.result(client.send(HttpRequest(uri = "https://postman-echo.com/get?a=1")), 30.seconds)
 
-// The recorded VCR file gets written on close
 client.close()
 system.terminate()
 ```
+
+Pekko HTTP has no client object, so `VcrHttp.create` can also wrap any `HttpRequest => Future[HttpResponse]` function.
 </details>
 
-### Using a custom matcher
+## Record modes
 
-By default, Be Kind Rewind matches requests by `method + uri` only. Let's say you want to instead match on
-`method + uri + body`, except that you want to exclude one field in the JSON body (timestamp in this case). You can
-write a custom matcher to accomplish this:
+The record mode determines when requests are replayed and when they are sent and recorded:
+
+| Mode | Behavior |
+| --- | --- |
+| `RecordMode.NewEpisodes` (default) | Replay recorded requests and record new ones |
+| `RecordMode.Once` | Record everything if nothing was recorded yet. Otherwise only replay, and fail on unrecorded requests |
+| `RecordMode.ReplayOnly` | Only replay. Unrecorded requests fail instead of being sent (useful for CI) |
+| `RecordMode.RecordAll` | Ignore previous recordings and re-record everything |
 
 ```scala
-import bekindrewind._
-import bekindrewind.codec.JsonCodec
-import bekindrewind.storage.FileVcrStorage
-import bekindrewind.sttpclient._
-import io.circe.Json
-import io.circe.syntax._
-import sttp.client3._
-import java.nio.file.Paths
-
-val vcrBackend = VcrBackend(
-  underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
-  matcher = VcrMatcher.groupBy { req =>
-    // This is just an example. Handle errors properly in real code.
-    val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject).get
-
-    // We want to key off `method + uri + body (excluding the timestamp)`
-    (req.method, req.uri, jsonBody.remove("timestamp"))
-  }
-)
-
-val request = basicRequest
-  .post(uri"https://postman-echo.com/post")
-  .body(
-    Json.obj(
-      "user" -> "foo".asJson,
-      "timestamp" -> System.currentTimeMillis().asJson
-    ).noSpaces
-  )
-
-// The first time you run this a real HTTP request will be sent. The next time you run it, the
-// recorded response will be played back instead.
-request.send(vcrBackend)
-
-// The recorded VCR file gets written on close
-vcrBackend.close()
+VcrBackend(backend, storage, recordOptions = RecordOptions.default.mode(RecordMode.ReplayOnly))
 ```
 
-Note that if you didn't exclude `timestamp`, a real HTTP request would be sent every run because the matcher would see each request as a unique one.
+Requests that fail because of the record mode fail with a `VcrException` without being sent.
+
+## Matching requests
+
+By default, Be Kind Rewind matches requests by `method + uri` only. When the same request is made several times, the
+recorded responses are replayed in the order they were recorded.
+
+Prebuilt matchers:
+
+| Matcher | Matches on |
+| --- | --- |
+| `VcrMatcher.default` | method + URI |
+| `VcrMatcher.methodUriAndBody` | method + URI + body |
+| `VcrMatcher.ignoringQueryParamOrder` | method + URI, where the order of query parameters doesn't matter |
+| `VcrMatcher.methodUriAndHeaders("Accept", ...)` | method + URI + the specified headers (names are case-insensitive) |
+| `VcrMatcher.identity` | the entire request |
+| `JsonMatchers.methodUriAndJsonBody("timestamp", ...)` | method + URI + JSON body, ignoring the specified fields at any depth as well as formatting and field order (in `be-kind-rewind-codec-circe-json`) |
+
+`JsonMatchers.methodUriAndJsonBody` is useful for request bodies with values that change every run, such as timestamps
+or nonces. Without it, a real HTTP request would be sent every run because every request would look new.
+
+### Custom matchers
+
+Use `VcrMatcher.groupBy` to match on anything else. Requests with equal keys are considered the same request:
+
+```scala
+import bekindrewind.{ RequestKeys, VcrMatcher }
+
+val matcher = VcrMatcher.groupBy { req =>
+  (req.method, RequestKeys.sortedQueryParams(req.uri), RequestKeys.headers(req, "X-Api-Version"))
+}
+```
 
 ### Only record a subset of HTTP requests
 
-You can use the `shouldRecord` filter to choose which requests to record and which to leave alone.
+Requests rejected by `shouldRecord` are sent as usual but not recorded (or fail, if
+`RecordOptions.notRecordedThrowsErrors` is set):
 
 ```scala
-import bekindrewind._
-import bekindrewind.codec.JsonCodec
-import bekindrewind.storage.FileVcrStorage
-import bekindrewind.sttpclient._
-import sttp.client3._
-import java.nio.file.Paths
-
-val vcrBackend = VcrBackend(
-  underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
-  matcher = VcrMatcher.default.withShouldRecord { req =>
-    req.uri.getHost == "postman-echo.com"
-  }
-)
-
-// Will record this request since the host matches our filter.
-val request1 = basicRequest.get(uri"https://postman-echo.com/get?a=1")
-request1.send(vcrBackend)
-
-// The HTTP request will go through as normal, but it won't be recorded as it doesn't match the filter.
-val request2 = basicRequest.get(uri"https://api.ipify.org")
-request2.send(vcrBackend)
-
-// The recorded VCR file gets written on close
-vcrBackend.close()
-```
-
-### Using VCR transformers (e.g. filter sensitive data)
-
-A transformer is basically just a mapping function `VcrEntry => VcrEntry` that is applied before saving to disk. This is
-particularly useful if you want filter sensitive data such as API keys. You likely don't want to commit those to source
-control, especially in a public repository.
-
-```scala
-import bekindrewind._
-import bekindrewind.codec.JsonCodec
-import bekindrewind.storage.FileVcrStorage
-import bekindrewind.sttpclient._
-import sttp.client3._
-import java.nio.file.Paths
-
-val vcrBackend = VcrBackend(
-  underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
-  matcher = VcrMatcher.default.withTransformer { entry =>
-    entry.copy(
-      request = entry.request.copy(
-        // Remove the sensitive HTTP request header
-        headers = entry.request.headers - "X-API-Key"
-      )
-    )
-  }
-)
-
-val request = basicRequest.get(uri"https://postman-echo.com/get?a=1").header("X-API-Key", "very-secret-key")
-
-// The first time you run this a real HTTP request will be sent. The next time you run it, the
-// recorded response will be played back instead.
-request.send(vcrBackend)
-
-// The recorded VCR file gets written on close
-vcrBackend.close()
-```
-
-### Making recorded VCR entries expire after some time
-
-You can set the `expiresAfter` Duration field in `RecordOptions` to make recorded VCR entries expire after a specified
-amount of time.
-
-```scala
-val vcrBackend = VcrBackend(
-  underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
-  recordOptions = RecordOptions.default.copy(
-    expiresAfter = Some(Duration.ofDays(90))
-  )
-)
+VcrMatcher.default.withShouldRecord(_.uri.getHost == "postman-echo.com")
 ```
 
 ### Using multiple matchers
 
-If you're using the same HTTP client instance for multiple websites/APIs/etc., you may find yourself wanting to
-customize the VCR matcher for each one. For example, 2 separate APIs having different fields that you want to not match
-on. Or if you need different transformers for each API.
-
-You can combine multiple VcrMatchers with `append` (or the `:+` alias) like this:
+If you're using the same HTTP client for multiple APIs, you may want a different matcher (or redaction) for each one.
+Combine matchers with `append` (or the `:+` alias). Each request uses the first matcher whose `shouldRecord` accepts it:
 
 ```scala
-import bekindrewind.VcrMatcher
-import bekindrewind.codec.JsonCodec
-import bekindrewind.storage.FileVcrStorage
-import bekindrewind.sttpclient._
-import io.circe.Json
-import io.circe.syntax._
-import sttp.client3._
-import java.nio.file.Paths
-
 val ipifyMatcher = VcrMatcher.default.withShouldRecord(_.uri.getHost == "api.ipify.org")
 
-val postmanEchoMatcher = VcrMatcher.groupBy { req =>
-  // This is just an example. Handle errors properly in real code.
-  val jsonBody = io.circe.parser.parse(req.body).toOption.flatMap(_.asObject).get
+val postmanEchoMatcher = JsonMatchers
+  .methodUriAndJsonBody("timestamp")
+  .withShouldRecord(_.uri.getHost == "postman-echo.com")
 
-  // We want to key off `method + uri + body (excluding the timestamp)`
-  (req.method, req.uri, jsonBody.remove("timestamp"))
-}.withShouldRecord(_.uri.getHost == "postman-echo.com")
-
-val vcrBackend = VcrBackend(
-  underlyingClient = HttpURLConnectionBackend(),
-  storage = FileVcrStorage(Paths.get("vcr/example.json"), JsonCodec),
-  matcher = ipifyMatcher :+ postmanEchoMatcher // Combines both matchers into one.
-)
-
-val request1 = basicRequest.get(uri"https://api.ipify.org")
-
-// This will match `ipifyMatcher` because of its `shouldRecord` predicate which checks if the host is `api.ipify.org`
-request1.send(vcrBackend)
-
-val request2 = basicRequest
-  .post(uri"https://postman-echo.com/post")
-  .body(
-    Json
-      .obj(
-        "user"      -> "foo".asJson,
-        "timestamp" -> System.currentTimeMillis().asJson
-      )
-      .noSpaces
-  )
-
-// This will first fail to match `ipifyMatcher`, and then the next matcher is attempted. `postmanEchoMatcher` matches
-// so that is used instead.
-request2.send(vcrBackend)
-
-// The recorded VCR file gets written on close
-vcrBackend.close()
+val matcher = ipifyMatcher :+ postmanEchoMatcher
 ```
+
+## Filtering sensitive data
+
+You likely don't want to commit API keys and other secrets to source control, especially in a public repository.
+Redaction replaces values with `REDACTED` before recordings are saved:
+
+```scala
+val matcher = VcrMatcher.default
+  .redactHeaders("Authorization", "X-API-Key")           // request and response headers, case-insensitive
+  .redactQueryParams("api_key")                          // query parameters
+  .mapRequest(JsonRedaction.request("password"))         // JSON request body fields (be-kind-rewind-codec-circe-json)
+  .mapResponse(JsonRedaction.response("accessToken"))    // JSON response body fields
+```
+
+Request redaction is also applied to live requests before they are matched, so a redacted query parameter still
+matches on replay.
+
+For anything else, `mapRequest`, `mapResponse` and `withTransformer` (or `andThenTransform` to add to the existing
+transformer) take arbitrary functions that are applied before saving:
+
+```scala
+VcrMatcher.default.andThenTransform { entry =>
+  entry.copy(response = entry.response.copy(headers = entry.response.headers - "Set-Cookie"))
+}
+```
+
+## Expiring recordings
+
+Set `expiresAfter` to re-record once recordings reach a certain age:
+
+```scala
+RecordOptions.default.expiresAfter(Duration.ofDays(90))
+```
+
+A test's entries expire together once the oldest one is older than `expiresAfter`, so that a test never mixes old and
+newly recorded responses.
+
+## Unused entries
+
+Recorded entries that were never replayed, such as requests the test no longer makes, are reported when the recording
+is saved. This is controlled by `RecordOptions.unusedEntries`:
+
+| Setting | Behavior |
+| --- | --- |
+| `UnusedEntries.Warn` (default) | Print the unused entries to stderr |
+| `UnusedEntries.Prune` | Remove the unused entries from the recording |
+| `UnusedEntries.Fail` | Fail the test (useful on CI to catch stale recordings) |
+| `UnusedEntries.Ignore` | Do nothing |
+
+Unused entries are only handled when the test succeeded, since a failed test may not have made all of its requests.
+`Prune` only applies in `NewEpisodes` mode and when the recording belongs to a single test (which is always the case with
+the test framework integrations). Otherwise it behaves like `Warn`.
+
+## Recordings
+
+Recordings are human-readable. Bodies are stored as text when possible and as base64 for binary content, so responses
+are replayed byte for byte:
+
+```json
+{
+  "entries": [
+    {
+      "testName": "gets a user",
+      "request": {
+        "method": "GET",
+        "uri": "https://postman-echo.com/get?user=1",
+        "body": "",
+        "httpVersion": "HTTP/1.1"
+      },
+      "response": {
+        "statusCode": 200,
+        "statusText": "OK",
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "body": "{\"args\":{\"user\":\"1\"}}",
+        "contentType": "application/json; charset=utf-8"
+      },
+      "recordedAt": "2026-09-24T12:34:56.789Z"
+    }
+  ],
+  "version": "0.2.0"
+}
+```
+
+Replayed responses have an `X-VCR-Cache: true` header, in case you need to tell them apart from real responses.
 
 ### Codecs
 
-The examples above use JSON for storing the recorded VCR entries, but you can also use other formats (as well as custom ones)
-such as YAML.
-
-To use YAML, add the following dependency:
+Recordings are stored as JSON by default. To use YAML, add:
 
 ```scala
-"com.github.reibitto" %% "be-kind-rewind-codec-circe-yaml" % "0.1.0" // Optional
+"com.github.reibitto" %% "be-kind-rewind-codec-circe-yaml" % "0.2.0"
 ```
 
-And then pass `YamlCodec` to `FileVcrStorage`:
+And use `YamlCodec` (override `vcrCodec` in the test framework integrations, or pass it to `FileVcrStorage`):
 
 ```scala
 FileVcrStorage(Paths.get("vcr/example.yml"), YamlCodec)
 ```
 
-### Other
+Other formats can be supported by implementing `Codec`, and other kinds of storage by implementing `VcrStorage`.
 
-If you want to know whether the HTTP response is a VCR replay, you can check the follow response header:
+## Migrating from 0.1.0
 
-```
-X-VCR-Cache: true
-```
+- The `akka-http` module was replaced by `be-kind-rewind-pekko-http` (package `bekindrewind.pekkohttp`), and the Play
+  modules now use Play 3 (Pekko). Scala 2.12 is no longer supported.
+- `RecordOptions(overwriteAll = true)` is now `RecordOptions.default.mode(RecordMode.RecordAll)`.
+- `VcrStorage.read()` returns `Either[Throwable, Option[VcrEntries]]`, and `Codec` has a new `fileExtension` member.
+- `VcrRequest.httpVersion` is now optional, and `VcrRequest`/`VcrResponse` have a new `bodyEncoding` field.
+- Expiration applies to each test's entries instead of the whole file.
+- Recordings made with 0.1.0 can still be read.
 
 ## Overview
 
@@ -415,7 +535,7 @@ Here I'll note some pros and cons, as well as some precautions and things to avo
 ### Cons
 - It might not always be immediately clear to the user of the library when an HTTP request will be recorded or not.
 - If you're testing something like a list route, you may get different results if you try re-recording that same test in the future (since it's stateful). There may be strategies to get around this though, such as using query filters (date ranges, etc.) if the API you're using supports that. Or sandbox each test run if that's an option.
-- Some APIs are trickier to test than others. One such example would be an API that has only 1 route for everything and all the parameters are defined in the request body. Be Kind Rewind matches on HTTP method + URL by default. You can change this to include the body as well.
+- Some APIs are trickier to test than others. One such example would be an API that has only 1 route for everything and all the parameters are defined in the request body. Be Kind Rewind matches on HTTP method + URL by default. You can change this to include the body as well (see [Matching requests](#matching-requests)).
 - You need to be careful with unstable values in your request (such as timestamps, random IDs, etc). If the request matcher is looking at the body and there are random values in there, then the previously recorded entry won't be found. You need to write a custom matcher in such cases to strip out any random values that you have no control over.
 - Committing recordings to source control may not be desirable to some. I find it helpful having recorded requests/responses that I can always refer to, but opinions vary.
 - You need to be careful to not commit sensitive information such as API keys. Especially if your repository is public. Be extra careful if you don't have API keys that point to a sandbox environment.

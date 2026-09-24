@@ -3,8 +3,8 @@ package bekindrewind
 sealed trait VcrMatcher {
 
   /**
-   * Appends another VcrMatcher to this VcrMatcher. The specified VcrMatcher is attached to the end, meaning if the 1st
-   * VcrMatcher matches the request, the 2nd one
+   * Appends another VcrMatcher to this VcrMatcher. The specified VcrMatcher is attached to the end, meaning it is only
+   * used for requests that the preceding matchers don't accept (via `shouldRecord`).
    */
   def append(other: VcrMatcher): VcrMatcher
 
@@ -18,19 +18,19 @@ sealed trait VcrMatcher {
   def group(request: VcrRequest): VcrKey
 
   /** Finds the first VcrMatcher that matches the specified VcrRequest. */
-  def matcherFor(request: VcrRequest): Option[VcrMatcher]
+  def matcherFor(request: VcrRequest): Option[VcrMatcher.One]
 
   /** Returns whether the specified request will be recorded by this matcher or not. */
   def shouldRecord(request: VcrRequest): Boolean = matcherFor(request).isDefined
 
   /**
-   * Transforms a VcrEntry with the transformer attached to this matcher. One usage for this is to filter sensitive data
-   * from a request/response.
+   * Transforms a VcrEntry before it is saved: the transformer runs first, then the request and response filters (see
+   * [[mapRequest]] and [[mapResponse]]).
    */
   def transform(entry: VcrEntry): VcrEntry
 
   /**
-   * Attached the specified grouping function to this matcher.
+   * Attaches the specified grouping function to this matcher.
    */
   def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher
 
@@ -40,9 +40,31 @@ sealed trait VcrMatcher {
   def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher
 
   /**
-   * Attaches the specified VCR entry transformer to this matcher.
+   * Replaces the VCR entry transformer of this matcher.
    */
   def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher
+
+  /** Composes the specified function after the existing VCR entry transformer. */
+  def andThenTransform(f: VcrEntry => VcrEntry): VcrMatcher
+
+  /**
+   * Applies `f` to requests both before they are grouped and before they are saved. Since live requests go through the
+   * same function as recorded ones, `f` can remove data (such as API keys in a query string) without breaking matching.
+   * `f` should be idempotent.
+   */
+  def mapRequest(f: VcrRequest => VcrRequest): VcrMatcher
+
+  /** Applies `f` to responses before they are saved. */
+  def mapResponse(f: VcrResponse => VcrResponse): VcrMatcher
+
+  /** Replaces the values of the specified request and response headers (case-insensitive) with a placeholder. */
+  def redactHeaders(names: String*): VcrMatcher =
+    mapRequest(r => r.copy(headers = Redaction.headers(r.headers, names)))
+      .mapResponse(r => r.copy(headers = Redaction.headers(r.headers, names)))
+
+  /** Replaces the values of the specified query parameters with a placeholder. */
+  def redactQueryParams(names: String*): VcrMatcher =
+    mapRequest(r => r.copy(uri = Redaction.queryParams(r.uri, names)))
 }
 
 object VcrMatcher {
@@ -51,16 +73,23 @@ object VcrMatcher {
    * The default VcrMatcher which matches on HTTP method + URI. This does not match on the request body, HTTP headers,
    * etc.
    */
-  def default: VcrMatcher = VcrMatcher.One(
-    grouper = req => VcrKey(req.method, req.uri),
-    shouldRecordPredicate = _ => true,
-    transformer = entry => entry
-  )
+  def default: VcrMatcher = VcrMatcher.groupBy(req => (req.method, req.uri))
 
   /**
    * A VcrMatcher that matches on the entire VcrRequest as is. In other words, it matches on every single field.
    */
   def identity: VcrMatcher = VcrMatcher.groupBy(req => req)
+
+  /** Matches on HTTP method + URI + body. */
+  def methodUriAndBody: VcrMatcher = VcrMatcher.groupBy(req => (req.method, req.uri, req.body))
+
+  /** Matches on HTTP method + URI, where the order of query parameters doesn't matter. */
+  def ignoringQueryParamOrder: VcrMatcher =
+    VcrMatcher.groupBy(req => (req.method, RequestKeys.sortedQueryParams(req.uri)))
+
+  /** Matches on HTTP method + URI + the values of the specified headers (header names are case-insensitive). */
+  def methodUriAndHeaders(headerNames: String*): VcrMatcher =
+    VcrMatcher.groupBy(req => (req.method, req.uri, RequestKeys.headers(req, headerNames: _*)))
 
   /**
    * Create a VcrMatcher with the specified grouping function. Example:
@@ -79,15 +108,17 @@ object VcrMatcher {
   final case class One(
     grouper: VcrRequest => VcrKey,
     shouldRecordPredicate: VcrRequest => Boolean,
-    transformer: VcrEntry => VcrEntry
+    transformer: VcrEntry => VcrEntry,
+    requestFilter: VcrRequest => VcrRequest = r => r,
+    responseFilter: VcrResponse => VcrResponse = r => r
   ) extends VcrMatcher {
     override def group(request: VcrRequest): VcrKey =
-      if (shouldRecord(request))
-        grouper(request)
+      if (shouldRecordPredicate(request))
+        grouper(requestFilter(request))
       else
         VcrKey.Ungrouped
 
-    override def matcherFor(request: VcrRequest): Option[VcrMatcher] =
+    override def matcherFor(request: VcrRequest): Option[VcrMatcher.One] =
       if (shouldRecordPredicate(request)) Some(this) else None
 
     override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher =
@@ -101,7 +132,22 @@ object VcrMatcher {
     override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       copy(transformer = transformer)
 
-    override def transform(entry: VcrEntry): VcrEntry = transformer(entry)
+    override def andThenTransform(f: VcrEntry => VcrEntry): VcrMatcher =
+      copy(transformer = transformer.andThen(f))
+
+    override def mapRequest(f: VcrRequest => VcrRequest): VcrMatcher =
+      copy(requestFilter = requestFilter.andThen(f))
+
+    override def mapResponse(f: VcrResponse => VcrResponse): VcrMatcher =
+      copy(responseFilter = responseFilter.andThen(f))
+
+    override def transform(entry: VcrEntry): VcrEntry = {
+      val transformed = transformer(entry)
+      transformed.copy(
+        request = requestFilter(transformed.request),
+        response = responseFilter(transformed.response)
+      )
+    }
 
     override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher = copy(grouper = grouper)
   }
@@ -110,15 +156,8 @@ object VcrMatcher {
     override def group(request: VcrRequest): VcrKey =
       matcherFor(request).map(_.group(request)).getOrElse(VcrKey.Ungrouped)
 
-    override def matcherFor(request: VcrRequest): Option[VcrMatcher] =
+    override def matcherFor(request: VcrRequest): Option[VcrMatcher.One] =
       matchers.find(_.shouldRecordPredicate(request))
-
-    override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher =
-      VcrMatcher.Many(
-        matchers.map { matcher =>
-          matcher.copy(shouldRecordPredicate = pred)
-        }
-      )
 
     override def append(other: VcrMatcher): VcrMatcher = other match {
       case m: VcrMatcher.One         => VcrMatcher.Many(this.matchers :+ m)
@@ -128,18 +167,20 @@ object VcrMatcher {
     override def transform(entry: VcrEntry): VcrEntry =
       matcherFor(entry.request).map(_.transform(entry)).getOrElse(entry)
 
-    override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
-      VcrMatcher.Many(
-        matchers.map { matcher =>
-          matcher.copy(transformer = transformer)
-        }
-      )
+    override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher = mapEach(_.withShouldRecord(pred))
 
-    override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher =
-      VcrMatcher.Many(
-        matchers.map { matcher =>
-          matcher.copy(grouper = grouper)
-        }
-      )
+    override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
+      mapEach(_.withTransformer(transformer))
+
+    override def andThenTransform(f: VcrEntry => VcrEntry): VcrMatcher = mapEach(_.andThenTransform(f))
+
+    override def mapRequest(f: VcrRequest => VcrRequest): VcrMatcher = mapEach(_.mapRequest(f))
+
+    override def mapResponse(f: VcrResponse => VcrResponse): VcrMatcher = mapEach(_.mapResponse(f))
+
+    override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher = mapEach(_.withGrouper(grouper))
+
+    private def mapEach(f: VcrMatcher.One => VcrMatcher): VcrMatcher =
+      VcrMatcher.Many(matchers.map(m => f(m).asInstanceOf[VcrMatcher.One]))
   }
 }

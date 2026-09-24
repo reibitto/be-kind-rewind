@@ -1,13 +1,11 @@
 package bekindrewind.playwsstandalone
 
-import akka.stream.Materializer
-import bekindrewind.{ VcrClient, VcrEntry, VcrRequest, VcrResponse }
+import org.apache.pekko.util.ByteString
 import play.api.libs.ws._
 
 import java.net.URI
-import java.time.OffsetDateTime
+import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ ExecutionContextExecutor, Future }
 
 class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSClient) extends StandaloneWSRequest {
   override type Self     = VcrStandaloneWSRequest
@@ -70,6 +68,9 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
 
   override def withMethod(method: String): Self = req.withMethod(method)
 
+  override def withDisableUrlEncoding(disableUrlEncoding: Boolean): Self =
+    req.withDisableUrlEncoding(disableUrlEncoding)
+
   override def withBody[T: BodyWritable](body: T): Self = req.withBody(body)
 
   override def get(): Future[Response] = execute("GET")
@@ -89,79 +90,25 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
   override def execute(method: String): Future[Response] =
     withMethod(method).execute()
 
-  override def execute(): Future[Response] = {
-    implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
-    implicit val mat: Materializer            = owner.materializer
-
-    for {
-      requestBodyString <- bodyAsString
-      vcrRequest         = VcrRequest(
-                             req.method,
-                             req.uri,
-                             requestBodyString,
-                             req.headers,
-                             "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
-                           )
-      response          <- owner.findMatch(vcrRequest) match {
-                             case Some(entry) =>
-                               Future.successful(
-                                 VcrStandaloneWSResponse(
-                                   entry.request.uri,
-                                   entry.response.statusCode,
-                                   entry.response.statusText,
-                                   entry.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")),
-                                   entry.response.body
-                                 )
-                               )
-
-                             case None if owner.matcher.shouldRecord(vcrRequest) =>
-                               for {
-                                 res <- req.execute(method).map { res =>
-                                          val entry = VcrEntry(
-                                            VcrRequest(
-                                              req.method,
-                                              req.uri,
-                                              requestBodyString,
-                                              req.headers,
-                                              "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
-                                            ),
-                                            VcrResponse(
-                                              res.status,
-                                              res.statusText,
-                                              res.headers.map { case (k, v) =>
-                                                (k, v.toSeq)
-                                              },
-                                              res.body,
-                                              Some(res.contentType)
-                                            ),
-                                            OffsetDateTime.now
-                                          )
-
-                                          owner.addNewEntry(entry)
-
-                                          res
-                                        }
-                               } yield res
-
-                             case None if owner.recordOptions.notRecordedThrowsErrors =>
-                               Future.failed(
-                                 new Exception(
-                                   s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
-                                 )
-                               )
-
-                             case None =>
-                               req.execute(method)
-                           }
-    } yield response
-  }
+  override def execute(): Future[Response] =
+    PlayVcr.bufferSourceBody(req)(owner.materializer) match {
+      case Some(buffered) =>
+        buffered.flatMap(new VcrStandaloneWSRequest(_, owner).execute())(owner.materializer.executionContext)
+      case None           =>
+        PlayVcr.execute[Response](
+          owner,
+          req,
+          () => req.execute(method),
+          entry =>
+            VcrStandaloneWSResponse(
+              req.uri,
+              entry.response.statusCode,
+              entry.response.statusText,
+              PlayVcr.replayHeaders(entry),
+              ByteString(entry.response.bodyBytes)
+            )
+        )(owner.materializer)
+    }
 
   override def stream(): Future[Response] = req.stream()
-
-  private def bodyAsString(implicit materializer: Materializer): Future[String] =
-    req.body match {
-      case EmptyBody          => Future.successful("")
-      case InMemoryBody(ws)   => Future.successful(ws.utf8String)
-      case SourceBody(source) => source.runFold("")(_ + _.utf8String)
-    }
 }

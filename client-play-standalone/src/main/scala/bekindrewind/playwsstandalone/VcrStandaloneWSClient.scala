@@ -1,8 +1,8 @@
 package bekindrewind.playwsstandalone
 
-import akka.stream.Materializer
 import bekindrewind.storage.VcrStorage
 import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
+import org.apache.pekko.stream.Materializer
 import play.api.libs.ws.{ StandaloneWSClient, StandaloneWSRequest }
 
 import scala.util.Try
@@ -33,7 +33,7 @@ object VcrStandaloneWSClient {
     underlyingClient: StandaloneWSClient,
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
-  )(implicit materializer: Materializer) =
+    matcher: VcrMatcher = VcrMatcher.default
+  )(implicit materializer: Materializer): VcrStandaloneWSClient =
     new VcrStandaloneWSClient(underlyingClient, storage, recordOptions, matcher)
 }
