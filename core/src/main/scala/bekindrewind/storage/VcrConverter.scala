@@ -3,8 +3,9 @@ package bekindrewind.storage
 import bekindrewind.VcrEntries
 import bekindrewind.codec.Codec
 
+import bekindrewind.util.{ Directories, Eithers }
+
 import java.nio.file.{ FileAlreadyExistsException, Files, Path }
-import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 /**
@@ -45,25 +46,17 @@ object VcrConverter {
   ): Either[Throwable, Vector[(Path, Path)]] = {
     val extension = s".${from.fileExtension}"
 
-    val sources = Try {
-      val stream = Files.walk(directory)
-      try
-        stream.iterator().asScala.filter(p => Files.isRegularFile(p) && p.toString.endsWith(extension)).toVector.sorted
-      finally stream.close()
-    }.toEither
-
     for {
-      sources   <- sources
-      converted <- sources.foldLeft[Either[Throwable, Vector[(Path, Path, VcrEntries)]]](Right(Vector.empty)) {
-                     case (acc, source) =>
-                       for {
-                         acc     <- acc
-                         entries <- read(source, from)
-                         target  <- targetPath(source, from, to)
-                       } yield acc :+ ((source, target, entries))
+      paths     <- Directories.walk(directory)
+      sources    = paths.filter(p => Files.isRegularFile(p) && p.toString.endsWith(extension))
+      converted <- Eithers.traverse(sources) { source =>
+                     for {
+                       entries <- read(source, from)
+                       target  <- targetPath(source, from, to)
+                     } yield (source, target, entries)
                    }
-      _         <- converted.foldLeft[Either[Throwable, Unit]](Right(())) { case (acc, (source, target, entries)) =>
-                     acc.flatMap(_ => write(entries, source, target, to, deleteSources))
+      _         <- Eithers.traverse(converted) { case (source, target, entries) =>
+                     write(entries, source, target, to, deleteSources)
                    }
     } yield converted.map { case (source, target, _) => source -> target }
   }

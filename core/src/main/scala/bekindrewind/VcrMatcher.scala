@@ -44,8 +44,8 @@ sealed trait VcrMatcher {
    */
   def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher
 
-  /** Composes the specified function after the existing VCR entry transformer. */
-  def andThenTransform(f: VcrEntry => VcrEntry): VcrMatcher
+  /** Applies `f` to entries before they are saved, after the existing transformer (see [[withTransformer]]). */
+  def mapEntry(f: VcrEntry => VcrEntry): VcrMatcher
 
   /**
    * Applies `f` to requests both before they are grouped and before they are saved. Since live requests go through the
@@ -58,18 +58,22 @@ sealed trait VcrMatcher {
   def mapResponse(f: VcrResponse => VcrResponse): VcrMatcher
 
   /**
-   * Applies `f` to requests before they are grouped, without changing what is recorded. For ignoring parts of requests
-   * that change every run (such as generated IDs) while keeping them in the recordings.
+   * Applies `f` to requests before they are grouped, without changing what is recorded (unlike [[mapRequest]]). For
+   * ignoring parts of requests that change every run (such as generated IDs) while keeping them in the recordings.
    */
-  def normalizeForMatching(f: VcrRequest => VcrRequest): VcrMatcher
+  def mapRequestForMatching(f: VcrRequest => VcrRequest): VcrMatcher
+
+  /** Transforms URIs before matching, e.g. to replace generated IDs in paths. Recorded URIs are unchanged. */
+  def mapUriForMatching(f: java.net.URI => java.net.URI): VcrMatcher =
+    mapRequestForMatching(r => r.copy(uri = f(r.uri)))
 
   /** Ignores the specified query parameters when matching. Unlike [[redactQueryParams]], they're still recorded. */
   def ignoreQueryParams(names: String*): VcrMatcher =
-    normalizeForMatching(r => r.copy(uri = RequestKeys.withoutQueryParams(r.uri, names: _*)))
+    mapUriForMatching(RequestKeys.withoutQueryParams(_, names: _*))
 
-  /** Transforms URIs before matching, e.g. to replace generated IDs in paths. Recorded URIs are unchanged. */
-  def mapUri(f: java.net.URI => java.net.URI): VcrMatcher =
-    normalizeForMatching(r => r.copy(uri = f(r.uri)))
+  /** Ignores the order of query parameters when matching. */
+  def ignoreQueryParamOrder: VcrMatcher =
+    mapUriForMatching(RequestKeys.sortedQueryParams)
 
   /** Adds redaction rules. See [[Redaction.Rules]]. */
   def withRedaction(rules: Redaction.Rules): VcrMatcher
@@ -77,7 +81,7 @@ sealed trait VcrMatcher {
   /**
    * The request as it would be recorded (redacted and filtered), for showing it in messages without leaking secrets.
    */
-  def redact(request: VcrRequest): VcrRequest
+  def redacted(request: VcrRequest): VcrRequest
 
   /**
    * Replaces the values of the specified request and response headers (case-insensitive) with a placeholder, as well as
@@ -103,17 +107,14 @@ object VcrMatcher {
    */
   def default: VcrMatcher = VcrMatcher.groupBy(req => (req.method, req.uri))
 
-  /**
-   * A VcrMatcher that matches on the entire VcrRequest as is. In other words, it matches on every single field.
-   */
-  def identity: VcrMatcher = VcrMatcher.groupBy(req => req)
+  /** Matches on every field of the request as is, including headers and body. */
+  def exact: VcrMatcher = VcrMatcher.groupBy(req => req)
+
+  @deprecated("Use `VcrMatcher.exact` instead.", "0.2.0")
+  def identity: VcrMatcher = exact
 
   /** Matches on HTTP method + URI + body. */
   def methodUriAndBody: VcrMatcher = VcrMatcher.groupBy(req => (req.method, req.uri, req.body))
-
-  /** Matches on HTTP method + URI, where the order of query parameters doesn't matter. */
-  def ignoringQueryParamOrder: VcrMatcher =
-    VcrMatcher.groupBy(req => (req.method, RequestKeys.sortedQueryParams(req.uri)))
 
   /** Matches on HTTP method + URI + the values of the specified headers (header names are case-insensitive). */
   def methodUriAndHeaders(headerNames: String*): VcrMatcher =
@@ -162,7 +163,7 @@ object VcrMatcher {
     override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher.One =
       copy(transformer = transformer)
 
-    override def andThenTransform(f: VcrEntry => VcrEntry): VcrMatcher.One =
+    override def mapEntry(f: VcrEntry => VcrEntry): VcrMatcher.One =
       copy(transformer = transformer.andThen(f))
 
     override def mapRequest(f: VcrRequest => VcrRequest): VcrMatcher.One =
@@ -171,12 +172,12 @@ object VcrMatcher {
     override def mapResponse(f: VcrResponse => VcrResponse): VcrMatcher.One =
       copy(responseFilter = responseFilter.andThen(f))
 
-    override def normalizeForMatching(f: VcrRequest => VcrRequest): VcrMatcher.One =
+    override def mapRequestForMatching(f: VcrRequest => VcrRequest): VcrMatcher.One =
       copy(matchingFilter = matchingFilter.andThen(f))
 
     override def withRedaction(rules: Redaction.Rules): VcrMatcher.One = copy(redaction = redaction ++ rules)
 
-    override def redact(request: VcrRequest): VcrRequest = requestFilter(redaction.request(request))
+    override def redacted(request: VcrRequest): VcrRequest = requestFilter(redaction.request(request))
 
     override def transform(entry: VcrEntry): VcrEntry = {
       val transformed = redaction.entry(entry, transformer(entry))
@@ -209,21 +210,21 @@ object VcrMatcher {
     override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       mapEach(_.withTransformer(transformer))
 
-    override def andThenTransform(f: VcrEntry => VcrEntry): VcrMatcher = mapEach(_.andThenTransform(f))
+    override def mapEntry(f: VcrEntry => VcrEntry): VcrMatcher = mapEach(_.mapEntry(f))
 
     override def mapRequest(f: VcrRequest => VcrRequest): VcrMatcher = mapEach(_.mapRequest(f))
 
     override def mapResponse(f: VcrResponse => VcrResponse): VcrMatcher = mapEach(_.mapResponse(f))
 
-    override def normalizeForMatching(f: VcrRequest => VcrRequest): VcrMatcher = mapEach(_.normalizeForMatching(f))
+    override def mapRequestForMatching(f: VcrRequest => VcrRequest): VcrMatcher = mapEach(_.mapRequestForMatching(f))
 
     override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher = mapEach(_.withGrouper(grouper))
 
     override def withRedaction(rules: Redaction.Rules): VcrMatcher = mapEach(_.withRedaction(rules))
 
     // Requests no matcher accepts aren't recorded, but every matcher's redaction applies to them in error messages.
-    override def redact(request: VcrRequest): VcrRequest =
-      matcherFor(request).fold(matchers.foldLeft(request)((r, m) => m.redaction.request(r)))(_.redact(request))
+    override def redacted(request: VcrRequest): VcrRequest =
+      matcherFor(request).fold(matchers.foldLeft(request)((r, m) => m.redaction.request(r)))(_.redacted(request))
 
     private def mapEach(f: VcrMatcher.One => VcrMatcher.One): VcrMatcher = VcrMatcher.Many(matchers.map(f))
   }

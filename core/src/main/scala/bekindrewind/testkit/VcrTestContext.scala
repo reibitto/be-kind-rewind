@@ -1,7 +1,7 @@
 package bekindrewind.testkit
 
 import bekindrewind.storage.SharedRecordingStorage
-import bekindrewind.{ RecordOptions, VcrRecording }
+import bekindrewind.{ RecordOptions, VcrRecording, VcrSettings }
 
 import java.nio.file.Path
 
@@ -25,4 +25,7 @@ final case class VcrTestContext(
   recordOptions: RecordOptions
 ) {
   def recording: VcrRecording = storage.recording
+
+  /** The test's storage and record options with the default matcher. Use `withMatcher` to change it. */
+  def settings: VcrSettings = VcrSettings(storage, recordOptions)
 }

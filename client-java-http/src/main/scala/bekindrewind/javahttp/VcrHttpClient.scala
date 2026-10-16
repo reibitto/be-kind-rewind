@@ -24,7 +24,7 @@ import scala.util.Try
  * to the request's `BodyHandler`.
  */
 class VcrHttpClient(
-  val underlying: HttpClient,
+  val underlyingClient: HttpClient,
   val storage: VcrStorage,
   val recordOptions: RecordOptions,
   val matcher: VcrMatcher
@@ -58,7 +58,7 @@ class VcrHttpClient(
           toResponse(request, handler, response.statusCode, headers, version, response.bodyBytes, Optional.empty())
 
         case VcrAction.Record =>
-          underlying.sendAsync(sendable, BodyHandlers.ofByteArray()).thenCompose { raw =>
+          underlyingClient.sendAsync(sendable, BodyHandlers.ofByteArray()).thenCompose { raw =>
             val headers = toScalaHeaders(raw.headers())
             addNewEntry(
               VcrEntry(
@@ -77,7 +77,7 @@ class VcrHttpClient(
             toResponse(request, handler, raw.statusCode(), raw.headers(), raw.version(), raw.body(), raw.sslSession())
           }
 
-        case VcrAction.PassThrough => underlying.sendAsync(sendable, handler)
+        case VcrAction.PassThrough => underlyingClient.sendAsync(sendable, handler)
 
         case VcrAction.Fail(error) => CompletableFuture.failedFuture[HttpResponse[T]](error)
       }
@@ -90,45 +90,49 @@ class VcrHttpClient(
     pushPromiseHandler: PushPromiseHandler[T]
   ): CompletableFuture[HttpResponse[T]] = sendAsync(request, handler)
 
-  /** Closes the underlying client (`HttpClient` is closeable since JDK 21), then rethrows any error from saving. */
-  override def close(): Unit = {
-    val saved = Try(save())
-    (underlying: AnyRef) match {
-      case closeable: AutoCloseable => closeable.close()
-      case _                        => ()
-    }
-    saved.get
-  }
+  /**
+   * Closes the underlyingClient client (`HttpClient` is closeable since JDK 21), then rethrows any error from saving.
+   */
+  override def close(): Unit =
+    try save()
+    finally
+      (underlyingClient: AnyRef) match {
+        case closeable: AutoCloseable => closeable.close()
+        case _                        => ()
+      }
 
-  override def cookieHandler(): Optional[CookieHandler] = underlying.cookieHandler()
+  override def cookieHandler(): Optional[CookieHandler] = underlyingClient.cookieHandler()
 
-  override def connectTimeout(): Optional[Duration] = underlying.connectTimeout()
+  override def connectTimeout(): Optional[Duration] = underlyingClient.connectTimeout()
 
-  override def followRedirects(): Redirect = underlying.followRedirects()
+  override def followRedirects(): Redirect = underlyingClient.followRedirects()
 
-  override def proxy(): Optional[ProxySelector] = underlying.proxy()
+  override def proxy(): Optional[ProxySelector] = underlyingClient.proxy()
 
-  override def sslContext(): SSLContext = underlying.sslContext()
+  override def sslContext(): SSLContext = underlyingClient.sslContext()
 
-  override def sslParameters(): SSLParameters = underlying.sslParameters()
+  override def sslParameters(): SSLParameters = underlyingClient.sslParameters()
 
-  override def authenticator(): Optional[Authenticator] = underlying.authenticator()
+  override def authenticator(): Optional[Authenticator] = underlyingClient.authenticator()
 
-  override def version(): Version = underlying.version()
+  override def version(): Version = underlyingClient.version()
 
-  override def executor(): Optional[Executor] = underlying.executor()
+  override def executor(): Optional[Executor] = underlyingClient.executor()
 
-  override def newWebSocketBuilder(): WebSocket.Builder = underlying.newWebSocketBuilder()
+  override def newWebSocketBuilder(): WebSocket.Builder = underlyingClient.newWebSocketBuilder()
 }
 
 object VcrHttpClient {
   def apply(
-    underlying: HttpClient,
+    underlyingClient: HttpClient,
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
     matcher: VcrMatcher = VcrMatcher.default
   ): VcrHttpClient =
-    new VcrHttpClient(underlying, storage, recordOptions, matcher)
+    new VcrHttpClient(underlyingClient, storage, recordOptions, matcher)
+
+  def apply(underlyingClient: HttpClient, settings: VcrSettings): VcrHttpClient =
+    apply(underlyingClient, settings.storage, settings.recordOptions, settings.matcher)
 
   private def readBody(request: HttpRequest): CompletableFuture[Array[Byte]] =
     request.bodyPublisher().toScala match {

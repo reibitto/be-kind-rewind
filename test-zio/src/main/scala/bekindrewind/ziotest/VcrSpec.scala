@@ -76,6 +76,7 @@ object VcrSpec {
   private[ziotest] def mapTests[R, E](spec: Spec[R, E])(
     f: (String, ZIO[R, TestFailure[E], TestSuccess]) => ZIO[R, TestFailure[E], TestSuccess]
   )(implicit trace: Trace): Spec[R, E] = {
+    // Scoped specs are only built when they run, so the counts can't be threaded through as values.
     val seen = mutable.Map.empty[String, Int]
 
     def loop(spec: Spec[R, E], labels: Chunk[String]): Spec[R, E] =

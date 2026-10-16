@@ -9,9 +9,9 @@ import java.net.URI
 
 class VcrMatcherSpec extends ScalaCheckSuite {
 
-  property("VcrMatcher.identity should allow all requests") {
+  property("VcrMatcher.exact should allow all requests") {
     forAll(Generators.vcrRequest) { (req: VcrRequest) =>
-      assert(VcrMatcher.identity.shouldRecord(req))
+      assert(VcrMatcher.exact.shouldRecord(req))
     }
   }
 
@@ -26,7 +26,7 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   }
 
   test("withShouldRecord") {
-    val matcher = VcrMatcher.identity.withShouldRecord(_.method == "GET")
+    val matcher = VcrMatcher.exact.withShouldRecord(_.method == "GET")
 
     assert(matcher.shouldRecord(request(method = "GET")))
     assert(!matcher.shouldRecord(request(method = "POST")))
@@ -66,7 +66,7 @@ class VcrMatcherSpec extends ScalaCheckSuite {
 
   test("append flattens matchers") {
     val a = VcrMatcher.default
-    val b = VcrMatcher.identity
+    val b = VcrMatcher.exact
     val c = VcrMatcher.groupBy(_.uri)
 
     def size(matcher: VcrMatcher) = matcher match {

@@ -14,8 +14,8 @@ object VcrAction {
   /** Send the request without recording it. */
   case object PassThrough extends VcrAction
 
-  /** Fail without sending the request. */
-  final case class Fail(error: VcrException) extends VcrAction
+  /** Fail without sending the request, e.g. because the record mode forbids it or the recording can't be read. */
+  final case class Fail(error: Throwable) extends VcrAction
 }
 
 final class VcrException(message: String) extends RuntimeException(message)

@@ -45,7 +45,7 @@ class VcrTestContextSpec extends FunSuite {
     val labeled    = entry().copy(testName = Some("other test"))
 
     underlying.write(VcrEntries(Vector(labeled), "0.2.0"))
-    val client = MockClient(underlying.withTestName("my test"), RecordOptions.default, VcrMatcher.identity)
+    val client = MockClient(underlying.withTestName("my test"), RecordOptions.default, VcrMatcher.exact)
     client.findMatch(labeled.request)
     client.addNewEntry(entry(request(uri = "https://example.com/new")))
     client.save()
@@ -75,7 +75,11 @@ class VcrTestSupportDefaultsSpec extends FunSuite {
     val core = Paths.get(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
     assert(core.toString.contains("target"), core.toString)
 
-    val expected = Iterator.iterate(core)(_.getParent).find(_.getFileName.toString == "target").get.getParent
+    val expected = Iterator
+      .unfold(Option(core))(_.map(path => (path, Option(path.getParent))))
+      .find(_.getFileName.toString == "target")
+      .flatMap(target => Option(target.getParent))
+      .getOrElse(fail(s"No target directory above $core"))
     assertEquals(Support.vcrDirectory, expected.resolve("src/test/resources/vcr"))
     assertEquals(expected.getFileName.toString, "core")
   }

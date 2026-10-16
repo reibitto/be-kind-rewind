@@ -3,6 +3,7 @@ package bekindrewind
 import bekindrewind.storage.{ SharedRecordingStorage, VcrStorage }
 
 import scala.collection.immutable
+import scala.util.Try
 
 trait VcrClient {
 
@@ -47,16 +48,21 @@ trait VcrClient {
 
   /**
    * Decides whether the request should be replayed, recorded, sent as is, or rejected. Requests the matcher doesn't
-   * record don't need a recording, so they're sent as is even when no test of a `VcrSession` is running.
+   * record don't need a recording, so they're sent as is even when no test of a `VcrSession` is running. Never throws:
+   * errors (such as a recording that can't be read) are returned as [[VcrAction.Fail]].
    */
   def resolve(vcrRequest: VcrRequest): VcrAction =
-    if (matcher.shouldRecord(vcrRequest)) recording.resolve(matcher, vcrRequest)
-    else currentRecording.fold[VcrAction](VcrAction.PassThrough)(_.resolve(matcher, vcrRequest))
+    resolveWith(vcrRequest)(_.resolve(matcher, vcrRequest))
 
-  /** See [[VcrRecording.resolveUnrecordable]]. */
+  /** See [[VcrRecording.resolveUnrecordable]]. Never throws, like [[resolve]]. */
   def resolveUnrecordable(vcrRequest: VcrRequest, reason: String): VcrAction =
-    if (matcher.shouldRecord(vcrRequest)) recording.resolveUnrecordable(matcher, vcrRequest, reason)
-    else currentRecording.fold[VcrAction](VcrAction.PassThrough)(_.resolveUnrecordable(matcher, vcrRequest, reason))
+    resolveWith(vcrRequest)(_.resolveUnrecordable(matcher, vcrRequest, reason))
+
+  private def resolveWith(vcrRequest: VcrRequest)(f: VcrRecording => VcrAction): VcrAction =
+    Try {
+      if (matcher.shouldRecord(vcrRequest)) f(recording)
+      else currentRecording.fold[VcrAction](VcrAction.PassThrough)(f)
+    }.fold(VcrAction.Fail(_), identity)
 
   private def currentRecording: Option[VcrRecording] =
     storage match {
@@ -92,6 +98,8 @@ object VcrClient {
       override val recordOptions: RecordOptions = o
     }
   }
+
+  def apply(settings: VcrSettings): VcrClient = apply(settings.storage, settings.matcher, settings.recordOptions)
 
   def notRecordedError(request: VcrRequest): VcrException =
     new VcrException(

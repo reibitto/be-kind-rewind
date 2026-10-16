@@ -33,7 +33,7 @@ trait VcrSpecFixtures extends BeforeAndAfterAll { self: org.scalatest.Suite =>
       .map(_.entries.map(_.testName))
 }
 
-class VcrTestSuiteSpec extends AnyFunSuite with VcrTestSuite with VcrSpecFixtures {
+class VcrSuiteSpec extends AnyFunSuite with VcrSuite with VcrSpecFixtures {
   override def vcrDirectory: Path              = vcrTempDirectory
   override def vcrRecordOptions: RecordOptions = RecordOptions.default
 
@@ -51,7 +51,7 @@ class VcrTestSuiteSpec extends AnyFunSuite with VcrTestSuite with VcrSpecFixture
     assert(!cached(recorded) && cached(replayed))
     assert(server.hits - hits == 1)
     assert(
-      testNamesIn("VcrTestSuiteSpec", "records-to-a-file-named-after-the-test-and-replays-from-it.json") ==
+      testNamesIn("VcrSuiteSpec", "records-to-a-file-named-after-the-test-and-replays-from-it.json") ==
         Some(Vector(Some("records to a file named after the test and replays from it")))
     )
   }
@@ -64,11 +64,11 @@ class VcrTestSuiteSpec extends AnyFunSuite with VcrTestSuite with VcrSpecFixture
       }
     }
 
-    assert(testNamesIn("VcrTestSuiteSpec", "recordings-are-saved-even-if-the-test-fails.json").exists(_.size == 1))
+    assert(testNamesIn("VcrSuiteSpec", "recordings-are-saved-even-if-the-test-fails.json").exists(_.size == 1))
   }
 }
 
-class AsyncVcrTestSuiteSpec extends AsyncFunSuite with AsyncVcrTestSuite with VcrSpecFixtures {
+class AsyncVcrSuiteSpec extends AsyncFunSuite with AsyncVcrSuite with VcrSpecFixtures {
   override def vcrDirectory: Path              = vcrTempDirectory
   override def vcrRecordOptions: RecordOptions = RecordOptions.default
 
@@ -78,14 +78,14 @@ class AsyncVcrTestSuiteSpec extends AsyncFunSuite with AsyncVcrTestSuite with Vc
     }.map { response =>
       assert(response.statusCode() == 200)
       assert(
-        testNamesIn("AsyncVcrTestSuiteSpec", "records-asynchronously-to-a-file-named-after-the-test.json") ==
+        testNamesIn("AsyncVcrSuiteSpec", "records-asynchronously-to-a-file-named-after-the-test.json") ==
           Some(Vector(Some("records asynchronously to a file named after the test")))
       )
     }
   }
 }
 
-class PerSuiteVcrTestSuiteSpec extends AnyFunSuite with VcrTestSuite with VcrSpecFixtures {
+class PerSuiteVcrSuiteSpec extends AnyFunSuite with VcrSuite with VcrSpecFixtures {
   override def vcrDirectory: Path                        = vcrTempDirectory
   override def vcrLayout: bekindrewind.testkit.VcrLayout = bekindrewind.testkit.VcrLayout.PerSuite
   override def vcrRecordOptions: RecordOptions           =
@@ -103,7 +103,7 @@ class PerSuiteVcrTestSuiteSpec extends AnyFunSuite with VcrTestSuite with VcrSpe
   test("second test") {
     record()
     assert(
-      testNamesIn(".", "PerSuiteVcrTestSuiteSpec.json") == Some(Vector(Some("first test"), Some("second test")))
+      testNamesIn(".", "PerSuiteVcrSuiteSpec.json") == Some(Vector(Some("first test"), Some("second test")))
     )
   }
 
@@ -117,7 +117,7 @@ class PerSuiteVcrTestSuiteSpec extends AnyFunSuite with VcrTestSuite with VcrSpe
     withVcr(ctx => VcrHttpClient(http, ctx.storage, ctx.recordOptions))(_ => ())
 
     assert(
-      testNamesIn(".", "PerSuiteVcrTestSuiteSpec.json") == Some(Vector(Some("first test"), Some("second test")))
+      testNamesIn(".", "PerSuiteVcrSuiteSpec.json") == Some(Vector(Some("first test"), Some("second test")))
     )
   }
 }

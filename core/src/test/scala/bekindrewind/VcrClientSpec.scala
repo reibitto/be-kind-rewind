@@ -11,6 +11,8 @@ import scala.collection.immutable
 
 class VcrClientSpec extends FunSuite {
 
+  private def isFail(action: VcrAction): Boolean = PartialFunction.cond(action) { case VcrAction.Fail(_) => true }
+
   private def storageWith(entries: VcrEntry*): InMemoryVcrStorage = {
     val storage = new InMemoryVcrStorage()
     storage.write(VcrEntries(entries.toVector, BuildInfo.version))
@@ -36,7 +38,7 @@ class VcrClientSpec extends FunSuite {
     val client  = MockClient(
       storage,
       RecordOptions.default,
-      VcrMatcher.identity.withTransformer { case entry @ VcrEntry(req, res, _, _) =>
+      VcrMatcher.exact.withTransformer { case entry @ VcrEntry(req, res, _, _) =>
         entry.copy(
           request = req.copy(uri = new URI("https://example.com/SAFE")),
           response = res.copy(headers = res.headers - "SENSITIVE_DATA")
@@ -83,15 +85,15 @@ class VcrClientSpec extends FunSuite {
     assertEquals(client.findMatch(request(uri = "https://example.com/unknown")), None)
   }
 
-  test("findMatch ignores the body with the default matcher but not with the identity matcher") {
+  test("findMatch ignores the body with the default matcher but not with the exact matcher") {
     val recorded = entry(request(method = "POST", body = "a"))
 
     val default = MockClient(storageWith(recorded), RecordOptions.default, VcrMatcher.default)
     assertEquals(default.findMatch(request(method = "POST", body = "b")), Some(recorded))
 
-    val identity = MockClient(storageWith(recorded), RecordOptions.default, VcrMatcher.identity)
-    assertEquals(identity.findMatch(request(method = "POST", body = "b")), None)
-    assertEquals(identity.findMatch(request(method = "POST", body = "a")), Some(recorded))
+    val exact = MockClient(storageWith(recorded), RecordOptions.default, VcrMatcher.exact)
+    assertEquals(exact.findMatch(request(method = "POST", body = "b")), None)
+    assertEquals(exact.findMatch(request(method = "POST", body = "a")), Some(recorded))
   }
 
   test("findMatch never matches requests rejected by shouldRecord") {
@@ -186,7 +188,7 @@ class VcrClientSpec extends FunSuite {
     )
   }
 
-  test("Storage read failures are raised instead of silently overwriting the recording") {
+  test("Storage read failures are raised (or returned by resolve) instead of silently overwriting the recording") {
     val failing = new VcrStorage {
       override def read(): Either[Throwable, Option[VcrEntries]] = Left(new RuntimeException("corrupt file"))
 
@@ -197,6 +199,7 @@ class VcrClientSpec extends FunSuite {
 
     val error = intercept[IllegalStateException](client.findMatch(request()))
     assertEquals(error.getCause.getMessage, "corrupt file")
+    assert(isFail(client.resolve(request())))
     intercept[IllegalStateException](client.save())
   }
 
@@ -237,7 +240,7 @@ class VcrClientSpec extends FunSuite {
 
   test("Once only replays when something is stored") {
     assertEquals(resolveWith(RecordMode.Once, entry())(request()), VcrAction.Replay(entry()))
-    assert(resolveWith(RecordMode.Once, entry())(other).isInstanceOf[VcrAction.Fail])
+    assert(isFail(resolveWith(RecordMode.Once, entry())(other)))
   }
 
   test("ReplayOnly never records") {
@@ -259,9 +262,7 @@ class VcrClientSpec extends FunSuite {
 
     assertEquals(MockClient(storage, RecordOptions.default, matcher).resolve(request()), VcrAction.PassThrough)
     assert(
-      MockClient(storage, RecordOptions.default.notRecordedThrowsErrors(true), matcher)
-        .resolve(request())
-        .isInstanceOf[VcrAction.Fail]
+      isFail(MockClient(storage, RecordOptions.default.notRecordedThrowsErrors(true), matcher).resolve(request()))
     )
   }
 
@@ -275,7 +276,7 @@ class VcrClientSpec extends FunSuite {
     recorder.addNewEntry(entry(live, response().copy(headers = Map("Authorization" -> Seq("echoed-secret")))))
     recorder.save()
 
-    val saved = storage.read().toOption.flatten.map(_.entries.head).getOrElse(fail("should be saved"))
+    val saved = storage.read().toOption.flatten.flatMap(_.entries.headOption).getOrElse(fail("should be saved"))
     assertEquals(saved.request.uri.toString, "https://example.com/data?apiKey=REDACTED&page=1")
     assertEquals(saved.request.headers, Map("authorization" -> Seq("REDACTED")))
     assertEquals(saved.response.headers, Map("Authorization" -> Seq("REDACTED")))
@@ -321,8 +322,8 @@ class VcrClientSpec extends FunSuite {
     assertEquals(resolve(RecordOptions.default), VcrAction.PassThrough)
     assertEquals(resolve(RecordOptions.default.mode(RecordMode.Once)), VcrAction.PassThrough)
     assertEquals(resolve(RecordOptions.default.mode(RecordMode.RecordAll)), VcrAction.PassThrough)
-    assert(resolve(RecordOptions.default.mode(RecordMode.Once), entry()).isInstanceOf[VcrAction.Fail])
-    assert(resolve(RecordOptions.default.notRecordedThrowsErrors(true)).isInstanceOf[VcrAction.Fail])
+    assert(isFail(resolve(RecordOptions.default.mode(RecordMode.Once), entry())))
+    assert(isFail(resolve(RecordOptions.default.notRecordedThrowsErrors(true))))
 
     resolve(RecordOptions.default.mode(RecordMode.ReplayOnly)) match {
       case VcrAction.Fail(error) => assert(error.getMessage.contains("because it's a stream"), error.getMessage)
@@ -341,6 +342,6 @@ class VcrClientSpec extends FunSuite {
       case VcrAction.Fail(error) => assert(!error.getMessage.contains("supersecret"), error.getMessage)
       case action                => fail(s"Expected failure, got $action")
     }
-    assertEquals(matcher.redact(live).headers, Map("Authorization" -> Seq("REDACTED")))
+    assertEquals(matcher.redacted(live).headers, Map("Authorization" -> Seq("REDACTED")))
   }
 }

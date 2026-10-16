@@ -103,7 +103,10 @@ class VcrSessionSpec extends FunSuite {
     val client  = support.vcrSession.client(VcrMatcher.default.withShouldRecord(_.uri.getHost != "passthrough.com"))
 
     assertEquals(client.resolve(request(uri = "https://passthrough.com/a")), VcrAction.PassThrough)
-    intercept[IllegalStateException](client.resolve(request(uri = uri("a"))))
+    client.resolve(request(uri = uri("a"))) match {
+      case VcrAction.Fail(error) => assert(error.getMessage.contains("No VCR test is running"), error.getMessage)
+      case action                => fail(s"Expected failure, got $action")
+    }
   }
 
   tempDir.test("Starting a test while another is running fails, and no running test fails too") { dir =>
@@ -140,7 +143,7 @@ class VcrSessionSpec extends FunSuite {
     client.addNewEntry(entry())
     client.save()
     client.save()
-    MockClient(shared, RecordOptions.default, VcrMatcher.identity).save()
+    MockClient(shared, RecordOptions.default, VcrMatcher.exact).save()
 
     assertEquals(storage.writes.get(), 1)
   }

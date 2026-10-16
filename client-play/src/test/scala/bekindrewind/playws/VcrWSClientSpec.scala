@@ -17,13 +17,11 @@ import scala.concurrent.duration._
 import scala.concurrent.{ Await, ExecutionContext }
 
 class VcrWSClientSpec extends FunSuite {
-  implicit private var system: ActorSystem = _
+  implicit private lazy val system: ActorSystem = ActorSystem("VcrWSClientSpec")
 
   implicit private def materializer: Materializer = SystemMaterializer(system).materializer
 
   implicit private def ec: ExecutionContext = system.dispatcher
-
-  override def beforeAll(): Unit = system = ActorSystem("VcrWSClientSpec")
 
   override def afterAll(): Unit = Await.result(system.terminate(), 30.seconds)
 

@@ -2,11 +2,11 @@ package bekindrewind.testkit
 
 import bekindrewind.codec.Codec
 import bekindrewind.storage.FileVcrStorage
+import bekindrewind.util.{ Directories, Eithers }
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{ Files, Path }
 import java.security.MessageDigest
-import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 /**
@@ -109,44 +109,44 @@ object VcrFileNaming {
   ): Either[Throwable, Vector[(Path, Path)]] = {
     val extension = s".${codec.fileExtension}"
 
-    def filesIn(dir: Path): Vector[Path] =
-      if (!Files.isDirectory(dir)) Vector.empty
-      else {
-        val stream = Files.list(dir)
-        try stream.iterator().asScala.toVector.sortBy(_.toString)
-        finally stream.close()
+    // The target for a recording that belongs to exactly one test, if it isn't already named that way.
+    def rename(suiteDir: Path, file: Path): Either[Throwable, Option[(Path, Path)]] =
+      FileVcrStorage(file, codec).read().map { stored =>
+        stored.fold(Vector.empty[Option[String]])(_.entries.map(_.testName)).flatten.distinct match {
+          case Vector(testName) =>
+            val input = Input(suiteDir.getFileName.toString, testName)
+            Some(file -> suiteDir.resolve(naming.fileName(input, codec.fileExtension))).filter { case (_, t) =>
+              t != file
+            }
+          case _                => None
+        }
       }
 
-    val renames = Try {
+    def renamesIn(suiteDir: Path): Either[Throwable, Vector[(Path, Path)]] =
       for {
-        suiteDir <- filesIn(vcrDirectory).filter(Files.isDirectory(_))
-        file     <- filesIn(suiteDir).filter(_.getFileName.toString.endsWith(extension))
-        entries   =
-          FileVcrStorage(file, codec).read().fold(throw _, _.fold(Vector.empty[bekindrewind.VcrEntry])(_.entries))
-        testName <- entries.flatMap(_.testName).distinct match {
-                      case Vector(name) => Vector(name)
-                      case _            => Vector.empty
-                    }
-        target    = suiteDir.resolve(naming.fileName(Input(suiteDir.getFileName.toString, testName), codec.fileExtension))
-        if target != file
-      } yield file -> target
-    }.toEither
+        files   <- Directories.list(suiteDir)
+        renames <- Eithers.traverse(files.filter(_.getFileName.toString.endsWith(extension)))(rename(suiteDir, _))
+      } yield renames.flatten
 
-    renames.flatMap { renames =>
+    def checkConflicts(renames: Vector[(Path, Path)]): Either[Throwable, Vector[(Path, Path)]] = {
       val targets   = renames.map(_._2)
-      val conflicts = targets.filter(Files.exists(_)) ++ targets.diff(targets.distinct)
+      val conflicts = (targets.filter(Files.exists(_)) ++ targets.diff(targets.distinct)).distinct
 
-      if (conflicts.nonEmpty)
+      if (conflicts.isEmpty) Right(renames)
+      else
         Left(
           new IllegalStateException(
-            s"Not renaming anything, since these files would be overwritten: ${conflicts.distinct.mkString(", ")}"
+            s"Not renaming anything, since these files would be overwritten: ${conflicts.mkString(", ")}"
           )
         )
-      else
-        Try {
-          if (!dryRun) renames.foreach { case (source, target) => Files.move(source, target) }
-          renames
-        }.toEither
     }
+
+    for {
+      suiteDirs <- Directories.list(vcrDirectory).map(_.filter(Files.isDirectory(_)))
+      renames   <- Eithers.traverse(suiteDirs)(renamesIn).map(_.flatten)
+      _         <- checkConflicts(renames)
+      _         <- if (dryRun) Right(Vector.empty)
+                   else Eithers.traverse(renames) { case (source, target) => Try(Files.move(source, target)).toEither }
+    } yield renames
   }
 }

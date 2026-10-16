@@ -121,13 +121,13 @@ client inside any test.
 "com.github.reibitto" %% "be-kind-rewind-scalatest" % "0.2.0" % Test
 ```
 
-Mix in `VcrTestSuite` (or `AsyncVcrTestSuite` for async suites) and wrap the test body with `withVcr`:
+Mix in `VcrSuite` (or `AsyncVcrSuite` for async suites) and wrap the test body with `withVcr`:
 
 ```scala
-import bekindrewind.scalatest.VcrTestSuite
+import bekindrewind.scalatest.VcrSuite
 import org.scalatest.funsuite.AnyFunSuite
 
-class UserApiSpec extends AnyFunSuite with VcrTestSuite {
+class UserApiSpec extends AnyFunSuite with VcrSuite {
   test("gets a user") {
     withVcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend =>
       ...
@@ -252,6 +252,10 @@ VCR_RECORD_MODE=record-all sbt test
 The VCR clients can also be used without a test framework. The recording is written when the client is closed (or when
 `save()` is called).
 
+Every client also accepts a `VcrSettings` (storage, record options and matcher) in place of the separate arguments, for
+example `VcrBackend(backend, VcrSettings(storage).withMatcher(matcher))`. In tests, `ctx.settings` has the test's
+storage and record options.
+
 ### sttp (client3)
 
 ```scala
@@ -284,7 +288,8 @@ vcrBackend.close()
 ```
 
 ```scala
-import bekindrewind.sttpclient4.{ VcrBackend, VcrSettings }
+import bekindrewind.VcrSettings
+import bekindrewind.sttpclient4.VcrBackend
 import sttp.client4._
 
 val vcrBackend = VcrBackend(
@@ -434,16 +439,17 @@ Prebuilt matchers:
 | --- | --- |
 | `VcrMatcher.default` | method + URI |
 | `VcrMatcher.methodUriAndBody` | method + URI + body |
-| `VcrMatcher.ignoringQueryParamOrder` | method + URI, where the order of query parameters doesn't matter |
 | `VcrMatcher.methodUriAndHeaders("Accept", ...)` | method + URI + the specified headers (names are case-insensitive) |
-| `VcrMatcher.identity` | the entire request |
-| `JsonMatchers.methodUriAndJsonBody("timestamp", ...)` | method + URI + JSON body, ignoring the specified fields at any depth as well as formatting and field order (in `be-kind-rewind-codec-circe-json`) |
-| `XmlMatchers.methodUriAndXmlBody(ignoredElements, ignoredAttributes)` | method + URI + XML body, ignoring the specified elements and attributes at any depth as well as whitespace and comments (in `be-kind-rewind-xml`) |
+| `VcrMatcher.exact` | the entire request |
+| `JsonMatchers.methodUriAndJsonBody` | method + URI + JSON body, ignoring formatting and field order (in `be-kind-rewind-codec-circe-json`) |
+| `JsonMatchers.methodUriAndJsonBodyIgnoring("timestamp", ...)` | the same, also ignoring the specified fields at any depth |
+| `XmlMatchers.methodUriAndXmlBody` | method + URI + XML body, ignoring whitespace and comments (in `be-kind-rewind-xml`) |
+| `XmlMatchers.methodUriAndXmlBodyIgnoring(elements = Set(...), attributes = Set(...))` | the same, also ignoring the specified elements and attributes at any depth |
 
-`JsonMatchers.methodUriAndJsonBody` is useful for request bodies with values that change every run, such as timestamps
-or nonces. Without it, a real HTTP request would be sent every run because every request would look new.
+`JsonMatchers.methodUriAndJsonBodyIgnoring` is useful for request bodies with values that change every run, such as
+timestamps or nonces. Without it, a real HTTP request would be sent every run because every request would look new.
 
-`JsonMatchers.methodUriAndJsonBody(ignoredFields, parseNestedJson = true)` also parses JSON inside string fields, for
+`JsonMatchers.methodUriAndJsonBodyIgnoring(fields, parseNestedJson = true)` also parses JSON inside string fields, for
 APIs that wrap one JSON request in another.
 
 ### Ignoring parts of requests
@@ -452,10 +458,11 @@ These can be added to any matcher. They only affect matching, so the recordings 
 
 ```scala
 JsonMatchers
-  .methodUriAndJsonBody("timestamp")
+  .methodUriAndJsonBodyIgnoring("timestamp")
   .ignoreQueryParams("nonce", "sign")
-  .mapUri(uri => URI.create(uri.toString.replaceAll("/orders/[0-9]+", "/orders/ID")))
-  .normalizeForMatching(req => req.copy(headers = req.headers - "X-Request-Id"))
+  .ignoreQueryParamOrder
+  .mapUriForMatching(uri => URI.create(uri.toString.replaceAll("/orders/[0-9]+", "/orders/ID")))
+  .mapRequestForMatching(req => req.copy(headers = req.headers - "X-Request-Id"))
 ```
 
 To remove values from the recordings as well, see [Filtering sensitive data](#filtering-sensitive-data).
@@ -490,7 +497,7 @@ Combine matchers with `append` (or the `:+` alias). Each request uses the first 
 val ipifyMatcher = VcrMatcher.default.withShouldRecord(_.uri.getHost == "api.ipify.org")
 
 val postmanEchoMatcher = JsonMatchers
-  .methodUriAndJsonBody("timestamp")
+  .methodUriAndJsonBodyIgnoring("timestamp")
   .withShouldRecord(_.uri.getHost == "postman-echo.com")
 
 val matcher = ipifyMatcher :+ postmanEchoMatcher
@@ -518,11 +525,11 @@ are unlikely to be secrets. Binary (base64) bodies are left as is.
 Request redaction is also applied to live requests before they are matched, so a redacted query parameter still
 matches on replay.
 
-For anything else, `mapRequest`, `mapResponse` and `withTransformer` (or `andThenTransform` to add to the existing
+For anything else, `mapRequest`, `mapResponse` and `mapEntry` (or `withTransformer` to replace the existing
 transformer) take arbitrary functions that are applied before saving:
 
 ```scala
-VcrMatcher.default.andThenTransform { entry =>
+VcrMatcher.default.mapEntry { entry =>
   entry.copy(response = entry.response.copy(headers = entry.response.headers - "Set-Cookie"))
 }
 ```
@@ -626,6 +633,7 @@ format (e.g. `yaml yaml`) rewrites recordings in the current output format.
 - The `akka-http` module was replaced by `be-kind-rewind-pekko-http` (package `bekindrewind.pekkohttp`), and the Play
   modules now use Play 3 (Pekko). Scala 3 is supported, and Scala 2.12 no longer is.
 - `RecordOptions(overwriteAll = true)` is now `RecordOptions.default.mode(RecordMode.RecordAll)`.
+- `VcrMatcher.identity` is now `VcrMatcher.exact`.
 - `VcrStorage.read()` returns `Either[Throwable, Option[VcrEntries]]`, and `Codec` has a new `fileExtension` member.
 - `VcrRequest.httpVersion` is now optional, and `VcrRequest`/`VcrResponse` have a new `bodyEncoding` field.
 - Expiration applies to each test's entries instead of the whole file.

@@ -6,21 +6,27 @@ import io.circe.Json
 object JsonMatchers {
 
   /**
-   * Matches on HTTP method + URI + JSON body, ignoring the specified fields at any depth (for example timestamps or
-   * nonces) as well as formatting and field order. Bodies that aren't JSON are compared as is.
+   * Matches on HTTP method + URI + JSON body, ignoring formatting and field order. Bodies that aren't JSON are compared
+   * as is.
    */
-  def methodUriAndJsonBody(ignoredFields: String*): VcrMatcher =
-    methodUriAndJsonBody(ignoredFields.toSet, parseNestedJson = false)
+  def methodUriAndJsonBody: VcrMatcher = methodUriAndJsonBodyIgnoring(Set.empty[String], parseNestedJson = false)
 
   /**
-   * Like `methodUriAndJsonBody(ignoredFields*)`.
+   * Like [[methodUriAndJsonBody]], but also ignores the specified fields at any depth (for example timestamps or
+   * nonces).
+   */
+  def methodUriAndJsonBodyIgnoring(fields: String*): VcrMatcher =
+    methodUriAndJsonBodyIgnoring(fields.toSet, parseNestedJson = false)
+
+  /**
+   * Like `methodUriAndJsonBodyIgnoring(fields*)`.
    *
    * @param parseNestedJson
    *   Also parse string values that contain JSON objects or arrays (such as a request wrapped in another request's
    *   `body` field), so that their formatting doesn't matter and their fields can be ignored too.
    */
-  def methodUriAndJsonBody(ignoredFields: Set[String], parseNestedJson: Boolean): VcrMatcher =
-    VcrMatcher.groupBy(req => (req.method, req.uri, jsonBody(req, ignoredFields, parseNestedJson)))
+  def methodUriAndJsonBodyIgnoring(fields: Set[String], parseNestedJson: Boolean): VcrMatcher =
+    VcrMatcher.groupBy(req => (req.method, req.uri, jsonBody(req, fields, parseNestedJson)))
 
   /** The body parsed as JSON without the specified fields, or the raw body if it isn't JSON. */
   def jsonBody(request: VcrRequest, ignoredFields: Set[String]): Either[String, Json] =

@@ -14,7 +14,6 @@ import java.time.OffsetDateTime
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.util.Try
 
 object VcrHttp {
   val defaultStrictTimeout: FiniteDuration = 30.seconds
@@ -28,6 +27,12 @@ object VcrHttp {
   )(implicit executionContext: ExecutionContext, materializer: Materializer): VcrHttp =
     new VcrHttp(sendRequest, storage, recordOptions, matcher, strictTimeout)
 
+  def create(sendRequest: HttpRequest => Future[HttpResponse], settings: VcrSettings)(implicit
+    executionContext: ExecutionContext,
+    materializer: Materializer
+  ): VcrHttp =
+    create(sendRequest, settings.storage, settings.recordOptions, settings.matcher)
+
   def useClassicActorSystem(
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
@@ -38,6 +43,9 @@ object VcrHttp {
     implicit val ec: ExecutionContext = executionContext.getOrElse(system.classicSystem.dispatcher)
     create(Http().singleRequest(_), storage, recordOptions, matcher, strictTimeout)
   }
+
+  def useClassicActorSystem(settings: VcrSettings)(implicit system: ClassicActorSystemProvider): VcrHttp =
+    useClassicActorSystem(settings.storage, settings.recordOptions, settings.matcher)
 
   private[pekkohttp] def toVcrRequest(request: HttpRequest, body: ByteString): VcrRequest =
     VcrRequest.fromBytes(
@@ -111,8 +119,8 @@ class VcrHttp private (
     with Closeable {
   import VcrHttp._
 
-  override def close(): Unit =
-    Try(save()).failed.foreach(_.printStackTrace())
+  /** Saves the recording. Throws if saving fails (e.g. because of unused entries). */
+  override def close(): Unit = save()
 
   def send(request: HttpRequest): Future[HttpResponse] =
     // Entities are made strict so that they can be both recorded and passed along (streamed ones can only be read once).

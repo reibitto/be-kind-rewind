@@ -90,7 +90,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
   /** Decides whether the request should be replayed, recorded, sent as is, or rejected. */
   def resolve(matcher: VcrMatcher, request: VcrRequest): VcrAction =
     if (!matcher.shouldRecord(request)) {
-      if (recordOptions.notRecordedThrowsErrors) VcrAction.Fail(VcrClient.notRecordedError(matcher.redact(request)))
+      if (recordOptions.notRecordedThrowsErrors) VcrAction.Fail(VcrClient.notRecordedError(matcher.redacted(request)))
       else VcrAction.PassThrough
     } else if (recordOptions.mode == RecordMode.RecordAll) VcrAction.Record
     else
@@ -101,7 +101,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
             case RecordMode.Once if loaded.isEmpty => VcrAction.Record
             case RecordMode.NewEpisodes            => VcrAction.Record
             case mode                              =>
-              VcrAction.Fail(VcrClient.noMatchError(matcher.redact(request), mode, expired))
+              VcrAction.Fail(VcrClient.noMatchError(matcher.redacted(request), mode, expired))
           }
       }
 
@@ -119,7 +119,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
       }
 
       if (replayOnly || recordOptions.notRecordedThrowsErrors)
-        VcrAction.Fail(VcrClient.unrecordableError(matcher.redact(request), reason))
+        VcrAction.Fail(VcrClient.unrecordableError(matcher.redacted(request), reason))
       else VcrAction.PassThrough
     }
 

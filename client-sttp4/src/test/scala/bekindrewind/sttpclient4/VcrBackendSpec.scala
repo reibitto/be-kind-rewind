@@ -126,7 +126,8 @@ class VcrBackendSpec extends FunSuite {
     assertEquals(request.send(recorder).body, Right("""{"compressed":true}"""))
     recorder.close()
 
-    val headers = storage.read().toOption.flatten.map(_.entries.head.response.headers.keySet.map(_.toLowerCase))
+    val headers =
+      storage.read().toOption.flatten.flatMap(_.entries.headOption).map(_.response.headers.keySet.map(_.toLowerCase))
     assert(headers.exists(h => !h.contains("content-encoding") && !h.contains("content-length")), headers.toString)
     assertEquals(request.send(backend(storage)).body, Right("""{"compressed":true}"""))
   }

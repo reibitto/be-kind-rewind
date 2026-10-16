@@ -7,7 +7,6 @@ import munit.{ FunSuite, Location, TestOptions }
 
 import scala.concurrent.Future
 import scala.util.Try
-import scala.util.control.NonFatal
 
 /**
  * Creates a VCR client for each test, stored according to [[vcrLayout]] (one file per test by default).
@@ -61,13 +60,7 @@ trait VcrSuite extends FunSuite with VcrTestSupport {
   }
 
   private def saveOnFailure[A](client: VcrClient)(use: => A): A =
-    try use
-    catch {
-      case NonFatal(e) =>
-        try vcrSave(client, succeeded = false)
-        catch { case NonFatal(saveError) => e.addSuppressed(saveError) }
-        throw e
-    }
+    vcrOnFailure(use)(vcrSave(client, succeeded = false))
 
   private def saveOnCompletion[A](client: VcrClient, future: Future[A]): Future[A] =
     future.transform(outcome => Try(vcrSave(client, outcome.isSuccess)).flatMap(_ => outcome))(munitExecutionContext)

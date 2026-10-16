@@ -16,13 +16,11 @@ import scala.concurrent.duration._
 import scala.concurrent.{ Await, ExecutionContext }
 
 class VcrStandaloneWSClientSpec extends FunSuite {
-  implicit private var system: ActorSystem = _
+  implicit private lazy val system: ActorSystem = ActorSystem("VcrStandaloneWSClientSpec")
 
   implicit private def materializer: Materializer = SystemMaterializer(system).materializer
 
   implicit private def ec: ExecutionContext = system.dispatcher
-
-  override def beforeAll(): Unit = system = ActorSystem("VcrStandaloneWSClientSpec")
 
   override def afterAll(): Unit = Await.result(system.terminate(), 30.seconds)
 
@@ -82,7 +80,7 @@ class VcrStandaloneWSClientSpec extends FunSuite {
   }
 
   server.test("Request bodies are recorded and sent") { server =>
-    val vcr = client(new InMemoryVcrStorage(), matcher = VcrMatcher.identity)
+    val vcr = client(new InMemoryVcrStorage(), matcher = VcrMatcher.exact)
 
     for {
       response <- vcr.url(server.url("/echo")).post("hello ✓")
@@ -183,7 +181,7 @@ class VcrStandaloneWSClientSpec extends FunSuite {
 
     vcr.url(server.url("/counter")).get().failed.map { error =>
       vcr.close()
-      assert(error.isInstanceOf[VcrException], error.toString)
+      assert(PartialFunction.cond(error) { case _: VcrException => true }, error.toString)
       assertEquals(server.hits, 0)
     }
   }

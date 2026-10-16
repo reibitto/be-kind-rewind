@@ -15,11 +15,9 @@ import scala.concurrent.duration._
 import scala.concurrent.{ Await, ExecutionContext, Future }
 
 class VcrHttpSpec extends FunSuite {
-  implicit private var system: ActorSystem = _
+  implicit private lazy val system: ActorSystem = ActorSystem("VcrHttpSpec")
 
   implicit private def ec: ExecutionContext = system.dispatcher
-
-  override def beforeAll(): Unit = system = ActorSystem("VcrHttpSpec")
 
   override def afterAll(): Unit = Await.result(system.terminate(), 30.seconds)
 
@@ -45,7 +43,7 @@ class VcrHttpSpec extends FunSuite {
       }))
 
     val storage   = new InMemoryVcrStorage()
-    val vcrClient = VcrHttp.create(stubSendRequest, storage, RecordOptions.default, VcrMatcher.identity)
+    val vcrClient = VcrHttp.create(stubSendRequest, storage, RecordOptions.default, VcrMatcher.exact)
     val req1      = HttpRequest(HttpMethods.POST, Uri("/files/new"), entity = HttpEntity(Array[Byte](1, 2, 3)))
     val req2      = HttpRequest(HttpMethods.PUT, Uri("/messages/1"), entity = HttpEntity("hello"))
     val req3      = HttpRequest(HttpMethods.GET, Uri("/raw"))
@@ -57,7 +55,7 @@ class VcrHttpSpec extends FunSuite {
       res2          <- vcrClient.send(req2)
       res3          <- vcrClient.send(req3)
       _              = vcrClient.close()
-      recordedClient = VcrHttp.create(stubSendRequest, storage, matcher = VcrMatcher.identity)
+      recordedClient = VcrHttp.create(stubSendRequest, storage, matcher = VcrMatcher.exact)
       res4          <- recordedClient.send(req1)
       res5          <- recordedClient.send(req2)
       res6          <- recordedClient.send(req3)
@@ -184,7 +182,7 @@ class VcrHttpSpec extends FunSuite {
       assertEquals(replayed.entity.contentType.value, "image/png")
       assert(cached(replayed))
 
-      val saved = storage.read().toOption.flatten.map(_.entries.head).getOrElse(fail("should be saved"))
+      val saved = storage.read().toOption.flatten.flatMap(_.entries.headOption).getOrElse(fail("should be saved"))
       assertEquals(saved.response.bodyEncoding, BodyEncoding.Base64)
       assertEquals(saved.request.httpVersion, Some("HTTP/1.1"))
       assertEquals(saved.response.httpVersion, Some("HTTP/1.1"))
@@ -199,7 +197,7 @@ class VcrHttpSpec extends FunSuite {
     )
 
     client.send(HttpRequest(uri = server.url("/counter"))).failed.map { error =>
-      assert(error.isInstanceOf[VcrException], error.toString)
+      assert(PartialFunction.cond(error) { case _: VcrException => true }, error.toString)
       assertEquals(server.hits, 0)
     }
   }
@@ -218,7 +216,7 @@ class VcrHttpSpec extends FunSuite {
       _         = recorder.close()
       replayed <- VcrHttp.useClassicActorSystem(storage).send(request)
     } yield {
-      val entry = storage.read().toOption.flatten.map(_.entries.head).getOrElse(fail("should be recorded"))
+      val entry = storage.read().toOption.flatten.flatMap(_.entries.headOption).getOrElse(fail("should be recorded"))
       assertEquals(entry.request.headers.get("Content-Type"), Some(Seq("application/json")))
       assert(entry.response.headers.contains("Content-Type"), entry.response.headers.toString)
       assert(cached(replayed))

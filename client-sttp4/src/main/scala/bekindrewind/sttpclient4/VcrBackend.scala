@@ -17,19 +17,12 @@ import java.time.OffsetDateTime
 import scala.collection.immutable
 import scala.util.Try
 
-/** Configuration for [[VcrBackend]]. */
-final case class VcrSettings(
-  storage: VcrStorage,
-  recordOptions: RecordOptions = RecordOptions.default,
-  matcher: VcrMatcher = VcrMatcher.default
-)
-
 /**
  * Wraps an sttp4 backend. Create one with the `VcrBackend.apply` overload for your backend type, for example
  * `VcrBackend(DefaultSyncBackend(), VcrSettings(storage))`. Web socket requests are passed through without recording.
  */
-abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], settings: VcrSettings)
-    extends DelegateBackend(delegate)
+abstract class VcrBackend[F[_], P] private (underlyingClient: GenericBackend[F, P], settings: VcrSettings)
+    extends DelegateBackend(underlyingClient)
     with VcrClient {
   import VcrBackend._
 
@@ -58,7 +51,7 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
       "it's a web socket, stream or multipart request"
     ) match {
       case VcrAction.Fail(error) => monad.error[Response[T]](error)
-      case _                     => delegate.send(request)
+      case _                     => underlyingClient.send(request)
     }
 
   private def sendBuffered[T](request: Request[T], body: Array[Byte]): F[Response[T]] = {
@@ -79,7 +72,7 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
 
       // The body is read as bytes and then converted the same way as when replaying, so both behave the same.
       case VcrAction.Record =>
-        delegate.send(request.response(asByteArrayAlways)).map { response =>
+        underlyingClient.send(request.response(asByteArrayAlways)).map { response =>
           addNewEntry(
             VcrEntry(
               vcrRequest,
@@ -100,7 +93,7 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
           response.copy(body = bodyFromResponseAs.apply[T](request.response, response, Left(response.body)))
         }
 
-      case VcrAction.PassThrough => delegate.send(request)
+      case VcrAction.PassThrough => underlyingClient.send(request)
 
       case VcrAction.Fail(error) => monad.error(error)
     }
@@ -109,31 +102,31 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
   /** Closes the underlying backend, then fails if saving failed (e.g. because of unused entries). */
   override def close(): F[Unit] = {
     val saved = Try(save())
-    delegate.close().flatMap(_ => saved.fold(monad.error[Unit], _ => monad.unit(())))
+    underlyingClient.close().flatMap(_ => saved.fold(monad.error[Unit], _ => monad.unit(())))
   }
 }
 
 object VcrBackend {
-  def apply(delegate: SyncBackend, settings: VcrSettings): SyncBackend with VcrClient =
-    new VcrBackend(delegate, settings) with SyncBackend {}
+  def apply(underlyingClient: SyncBackend, settings: VcrSettings): SyncBackend with VcrClient =
+    new VcrBackend(underlyingClient, settings) with SyncBackend {}
 
-  def apply[F[_]](delegate: Backend[F], settings: VcrSettings): Backend[F] with VcrClient =
-    new VcrBackend(delegate, settings) with Backend[F] {}
+  def apply[F[_]](underlyingClient: Backend[F], settings: VcrSettings): Backend[F] with VcrClient =
+    new VcrBackend(underlyingClient, settings) with Backend[F] {}
 
-  def apply[F[_], S](delegate: StreamBackend[F, S], settings: VcrSettings): StreamBackend[F, S] with VcrClient =
-    new VcrBackend(delegate, settings) with StreamBackend[F, S] {}
+  def apply[F[_], S](underlyingClient: StreamBackend[F, S], settings: VcrSettings): StreamBackend[F, S] with VcrClient =
+    new VcrBackend(underlyingClient, settings) with StreamBackend[F, S] {}
 
-  def apply(delegate: WebSocketSyncBackend, settings: VcrSettings): WebSocketSyncBackend with VcrClient =
-    new VcrBackend(delegate, settings) with WebSocketSyncBackend {}
+  def apply(underlyingClient: WebSocketSyncBackend, settings: VcrSettings): WebSocketSyncBackend with VcrClient =
+    new VcrBackend(underlyingClient, settings) with WebSocketSyncBackend {}
 
-  def apply[F[_]](delegate: WebSocketBackend[F], settings: VcrSettings): WebSocketBackend[F] with VcrClient =
-    new VcrBackend(delegate, settings) with WebSocketBackend[F] {}
+  def apply[F[_]](underlyingClient: WebSocketBackend[F], settings: VcrSettings): WebSocketBackend[F] with VcrClient =
+    new VcrBackend(underlyingClient, settings) with WebSocketBackend[F] {}
 
   def apply[F[_], S](
-    delegate: WebSocketStreamBackend[F, S],
+    underlyingClient: WebSocketStreamBackend[F, S],
     settings: VcrSettings
   ): WebSocketStreamBackend[F, S] with VcrClient =
-    new VcrBackend(delegate, settings) with WebSocketStreamBackend[F, S] {}
+    new VcrBackend(underlyingClient, settings) with WebSocketStreamBackend[F, S] {}
 
   private def toVcrRequest(request: GenericRequest[_, _], body: Array[Byte]): VcrRequest =
     VcrRequest.fromBytes(

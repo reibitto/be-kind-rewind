@@ -111,6 +111,9 @@ object VcrBackend {
   ): VcrBackend[F, P] =
     new VcrBackend[F, P](underlyingClient, storage, recordOptions, matcher)
 
+  def apply[F[_], P](underlyingClient: SttpBackend[F, P], settings: VcrSettings): VcrBackend[F, P] =
+    apply(underlyingClient, settings.storage, settings.recordOptions, settings.matcher)
+
   private def toVcrRequest(request: RequestT[Identity, _, _], body: Array[Byte]): VcrRequest =
     VcrRequest.fromBytes(
       request.method.method,

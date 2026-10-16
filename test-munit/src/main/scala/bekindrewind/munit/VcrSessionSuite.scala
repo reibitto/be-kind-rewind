@@ -1,7 +1,7 @@
 package bekindrewind.munit
 
 import scala.concurrent.Future
-import scala.util.control.NonFatal
+import scala.util.Try
 
 /**
  * Starts a VCR test for every test in the suite, so that clients created with `vcrSession.storage` outside of tests
@@ -30,13 +30,12 @@ trait VcrSessionSuite extends VcrSuite {
           val context = vcrContext(test.name)
           vcrSession.start(context)
 
-          val result =
-            try test.body()
-            catch { case NonFatal(e) => Future.failed(e) }
-
-          result.transform { outcome =>
-            scala.util.Try(vcrSession.finish(context, outcome.isSuccess)).flatMap(_ => outcome)
-          }(munitExecutionContext)
+          Future
+            .fromTry(Try(test.body()))
+            .flatten
+            .transform { outcome =>
+              Try(vcrSession.finish(context, outcome.isSuccess)).flatMap(_ => outcome)
+            }(munitExecutionContext)
         }
     )
 }

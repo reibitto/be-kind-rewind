@@ -8,8 +8,8 @@ class JsonHelpersSpec extends FunSuite {
 
   private def post(body: String): VcrRequest = request(method = "POST", body = body)
 
-  test("methodUriAndJsonBody ignores formatting, field order and ignored fields at any depth") {
-    val matcher = JsonMatchers.methodUriAndJsonBody("timestamp")
+  test("methodUriAndJsonBodyIgnoring ignores formatting, field order and the fields at any depth") {
+    val matcher = JsonMatchers.methodUriAndJsonBodyIgnoring("timestamp")
 
     val a = post("""{"user":"foo","timestamp":1,"nested":{"timestamp":2,"x":[{"timestamp":3,"y":1}]}}""")
     val b =
@@ -21,7 +21,7 @@ class JsonHelpersSpec extends FunSuite {
   }
 
   test("methodUriAndJsonBody compares non-JSON bodies as is") {
-    val matcher = JsonMatchers.methodUriAndJsonBody()
+    val matcher = JsonMatchers.methodUriAndJsonBody
 
     assertEquals(matcher.group(post("not json")), matcher.group(post("not json")))
     assertNotEquals(matcher.group(post("not json")), matcher.group(post("not json!")))
@@ -62,7 +62,7 @@ class JsonNestedSpec extends FunSuite {
   private def post(body: String) = request(method = "POST", body = body)
 
   test("parseNestedJson matches JSON inside string fields regardless of formatting, ignoring nested fields") {
-    val matcher = JsonMatchers.methodUriAndJsonBody(Set("Date"), parseNestedJson = true)
+    val matcher = JsonMatchers.methodUriAndJsonBodyIgnoring(Set("Date"), parseNestedJson = true)
 
     val a = post("""{"path":"/charge","body":"{\"Amount\":100,\"Date\":\"2024-01-01\"}"}""")
     val b = post("""{"path":"/charge","body":"{ \"Date\": \"2025-12-31\", \"Amount\": 100 }"}""")
@@ -71,13 +71,13 @@ class JsonNestedSpec extends FunSuite {
     assertEquals(matcher.group(a), matcher.group(b))
     assertNotEquals(matcher.group(a), matcher.group(c))
     assertNotEquals(
-      JsonMatchers.methodUriAndJsonBody("Date").group(a),
-      JsonMatchers.methodUriAndJsonBody("Date").group(b)
+      JsonMatchers.methodUriAndJsonBodyIgnoring("Date").group(a),
+      JsonMatchers.methodUriAndJsonBodyIgnoring("Date").group(b)
     )
   }
 
   test("parseNestedJson leaves strings that aren't JSON objects or arrays alone") {
-    val matcher = JsonMatchers.methodUriAndJsonBody(Set.empty[String], parseNestedJson = true)
+    val matcher = JsonMatchers.methodUriAndJsonBodyIgnoring(Set.empty[String], parseNestedJson = true)
 
     assertNotEquals(matcher.group(post("""{"n":"123"}""")), matcher.group(post("""{"n":123}""")))
     assertEquals(matcher.group(post("""{"s":"{not json"}""")), matcher.group(post("""{"s":"{not json"}""")))

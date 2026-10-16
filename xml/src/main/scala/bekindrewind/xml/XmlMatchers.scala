@@ -8,14 +8,19 @@ import scala.xml._
 object XmlMatchers {
 
   /**
-   * Matches on HTTP method + URI + XML body, ignoring the specified elements and attributes (by name, at any depth) as
-   * well as whitespace between elements and comments. Bodies that aren't XML are compared as is.
+   * Matches on HTTP method + URI + XML body, ignoring whitespace between elements and comments. Bodies that aren't XML
+   * are compared as is.
    */
-  def methodUriAndXmlBody(
-    ignoredElements: Set[String] = Set.empty,
-    ignoredAttributes: Set[String] = Set.empty
-  ): VcrMatcher =
-    VcrMatcher.groupBy(req => (req.method, req.uri, xmlBody(req, ignoredElements, ignoredAttributes)))
+  def methodUriAndXmlBody: VcrMatcher = methodUriAndXmlBodyIgnoring()
+
+  /**
+   * Like [[methodUriAndXmlBody]], but also ignores the specified elements and attributes (by name, at any depth).
+   * {{{
+   * XmlMatchers.methodUriAndXmlBodyIgnoring(elements = Set("Timestamp"), attributes = Set("requestId"))
+   * }}}
+   */
+  def methodUriAndXmlBodyIgnoring(elements: Set[String] = Set.empty, attributes: Set[String] = Set.empty): VcrMatcher =
+    VcrMatcher.groupBy(req => (req.method, req.uri, xmlBody(req, elements, attributes)))
 
   /** The body parsed as XML without the specified elements and attributes, or the raw body if it isn't XML. */
   def xmlBody(

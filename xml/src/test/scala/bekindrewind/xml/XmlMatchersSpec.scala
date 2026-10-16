@@ -8,7 +8,7 @@ class XmlMatchersSpec extends FunSuite {
   private def post(body: String): VcrRequest = request(method = "POST", body = body)
 
   private val matcher =
-    XmlMatchers.methodUriAndXmlBody(ignoredElements = Set("Timestamp"), ignoredAttributes = Set("ORDERID"))
+    XmlMatchers.methodUriAndXmlBodyIgnoring(elements = Set("Timestamp"), attributes = Set("ORDERID"))
 
   test("Ignores whitespace, comments, and the specified elements and attributes at any depth") {
     val a = post("""<root><item ORDERID="1" AMT="100"/><meta><Timestamp>1</Timestamp></meta></root>""")

@@ -49,7 +49,7 @@ class VcrBackendSpec extends FunSuite {
     val res2 = req2.send(vcrBackend)
     vcrBackend.close()
 
-    val recordedBackend = VcrBackend(testingBackend, storage, matcher = VcrMatcher.identity)
+    val recordedBackend = VcrBackend(testingBackend, storage, matcher = VcrMatcher.exact)
 
     val res3 = req1.send(recordedBackend)
     val res4 = req2.send(recordedBackend)
@@ -128,7 +128,7 @@ class VcrBackendSpec extends FunSuite {
 
   server.test("Request bodies are recorded and still sent intact") { server =>
     val storage = new InMemoryVcrStorage()
-    val backend = VcrBackend(HttpClientSyncBackend(), storage, matcher = VcrMatcher.identity)
+    val backend = VcrBackend(HttpClientSyncBackend(), storage, matcher = VcrMatcher.exact)
     val uri     = uri"${server.uri("/echo")}"
 
     val bytes      = "stream body ✓".getBytes(StandardCharsets.UTF_8)
@@ -239,7 +239,8 @@ class VcrBackendSpec extends FunSuite {
     assertEquals(request.send(recorder).body, Right("""{"compressed":true}"""))
     recorder.close()
 
-    val headers = storage.read().toOption.flatten.map(_.entries.head.response.headers.keySet.map(_.toLowerCase))
+    val headers =
+      storage.read().toOption.flatten.flatMap(_.entries.headOption).map(_.response.headers.keySet.map(_.toLowerCase))
     assert(headers.exists(h => !h.contains("content-encoding") && !h.contains("content-length")), headers.toString)
     assertEquals(request.send(VcrBackend(HttpClientSyncBackend(), storage)).body, Right("""{"compressed":true}"""))
   }

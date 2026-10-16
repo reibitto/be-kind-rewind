@@ -49,7 +49,7 @@ class RequestKeysSpec extends FunSuite {
     val a = request(uri = "https://a.com/?x=1&y=2").copy(headers = Map("Accept" -> Seq("json")))
     val b = request(uri = "https://a.com/?y=2&x=1").copy(headers = Map("accept" -> Seq("json")), body = "other")
 
-    assertEquals(VcrMatcher.ignoringQueryParamOrder.group(a), VcrMatcher.ignoringQueryParamOrder.group(b))
+    assertEquals(VcrMatcher.default.ignoreQueryParamOrder.group(a), VcrMatcher.default.ignoreQueryParamOrder.group(b))
     assertNotEquals(VcrMatcher.default.group(a), VcrMatcher.default.group(b))
 
     val byAccept = VcrMatcher.methodUriAndHeaders("Accept")
@@ -78,10 +78,10 @@ class RequestKeysSpec extends FunSuite {
     )
   }
 
-  test("andThenTransform composes transformers") {
+  test("mapEntry composes transformers") {
     val matcher = VcrMatcher.default
       .withTransformer(e => e.copy(response = e.response.copy(body = e.response.body + "1")))
-      .andThenTransform(e => e.copy(response = e.response.copy(body = e.response.body + "2")))
+      .mapEntry(e => e.copy(response = e.response.copy(body = e.response.body + "2")))
 
     assertEquals(matcher.transform(entry(response = response("0"))).response.body, "012")
   }
@@ -106,9 +106,9 @@ class RequestKeysSpec extends FunSuite {
     assertEquals(matcher.transform(entry(recorded)).request.uri, recorded.uri)
   }
 
-  test("mapUri affects matching only, and survives withGrouper") {
+  test("mapUriForMatching affects matching only, and survives withGrouper") {
     val matcher = VcrMatcher.default
-      .mapUri(uri => URI.create(uri.toString.replaceAll("/orders/[0-9]+", "/orders/ID")))
+      .mapUriForMatching(uri => URI.create(uri.toString.replaceAll("/orders/[0-9]+", "/orders/ID")))
       .withGrouper(r => VcrKey(r.uri))
 
     assertEquals(

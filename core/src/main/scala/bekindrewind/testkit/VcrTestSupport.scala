@@ -6,6 +6,7 @@ import bekindrewind.{ RecordMode, RecordOptions, VcrClient }
 
 import java.nio.file.{ Files, Path, Paths }
 import scala.collection.concurrent.TrieMap
+import scala.util.Try
 
 /** Settings shared by the test framework integrations. Override the members to customize them. */
 trait VcrTestSupport {
@@ -51,6 +52,19 @@ trait VcrTestSupport {
    */
   def vcrContext(testName: String): VcrTestContext =
     vcrSession.current.filter(_.testName == testName).getOrElse(newVcrContext(testName))
+
+  /**
+   * Runs `body`. If it throws, runs `onFailure` (such as saving the recording as failed) and rethrows, keeping any
+   * error from `onFailure` as a suppressed exception.
+   */
+  protected def vcrOnFailure[A](body: => A)(onFailure: => Unit): A =
+    Try(body).fold(
+      error => {
+        Try(onFailure).failed.foreach(error.addSuppressed)
+        throw error
+      },
+      identity
+    )
 
   /**
    * Saves a client created for a test, unless it records to the running `VcrSession` test, which saves when it ends.
@@ -100,21 +114,18 @@ object VcrTestSupport {
       .getOrElse(Paths.get("").toAbsolutePath)
 
   private def buildOutputModule(cls: Class[_]): Option[Path] =
-    scala.util
-      .Try(Paths.get(cls.getProtectionDomain.getCodeSource.getLocation.toURI))
-      .toOption
-      .flatMap { location =>
-        Iterator
-          .unfold(Option(location))(_.map(path => (path, Option(path.getParent))))
-          .sliding(2)
-          .collectFirst {
-            case Seq(output, module) if output.getFileName.toString == "target" => module
-            case Seq(output, module)
-                if output.getFileName.toString == "build" &&
-                  location.startsWith(output.resolve("classes")) =>
-              module
-          }
-      }
+    Try(Paths.get(cls.getProtectionDomain.getCodeSource.getLocation.toURI)).toOption.flatMap { location =>
+      Iterator
+        .unfold(Option(location))(_.map(path => (path, Option(path.getParent))))
+        .sliding(2)
+        .collectFirst {
+          case Seq(output, module) if output.getFileName.toString == "target" => module
+          case Seq(output, module)
+              if output.getFileName.toString == "build" &&
+                location.startsWith(output.resolve("classes")) =>
+            module
+        }
+    }
       .filter(module => Files.isDirectory(module.resolve("src")))
 
   def recordModeOverride: Option[RecordMode] =
