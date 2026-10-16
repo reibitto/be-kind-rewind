@@ -90,7 +90,15 @@ class VcrHttpClient(
     pushPromiseHandler: PushPromiseHandler[T]
   ): CompletableFuture[HttpResponse[T]] = sendAsync(request, handler)
 
-  override def close(): Unit = Try(save()).failed.foreach(_.printStackTrace())
+  /** Closes the underlying client (`HttpClient` is closeable since JDK 21), then rethrows any error from saving. */
+  override def close(): Unit = {
+    val saved = Try(save())
+    (underlying: AnyRef) match {
+      case closeable: AutoCloseable => closeable.close()
+      case _                        => ()
+    }
+    saved.get
+  }
 
   override def cookieHandler(): Optional[CookieHandler] = underlying.cookieHandler()
 
@@ -191,17 +199,15 @@ object VcrHttpClient {
     }
   }
 
+  // Covers versions added in newer JDKs (such as HTTP_3) too.
   private[javahttp] def showVersion(version: Version): String =
-    version match {
-      case Version.HTTP_1_1 => "HTTP/1.1"
-      case Version.HTTP_2   => "HTTP/2"
-    }
+    if (version == Version.HTTP_1_1) "HTTP/1.1" else version.name.replace("HTTP_", "HTTP/")
 
   private[javahttp] def parseVersion(version: String): Option[Version] =
     version match {
       case "HTTP/1.1"            => Some(Version.HTTP_1_1)
       case "HTTP/2" | "HTTP/2.0" => Some(Version.HTTP_2)
-      case _                     => None
+      case other                 => Try(Version.valueOf(other.replace("HTTP/", "HTTP_"))).toOption
     }
 
   // HTTP/2 pseudo-headers (such as `:status`) aren't real headers.

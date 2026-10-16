@@ -40,6 +40,14 @@ object VcrSpecSpec extends ZIOSpecDefault with VcrSpec {
     test("vcrTest saved the recording to a file named after the test") {
       testNames("records-a-request.json").map(names => assertTrue(names == Some(Vector(Some("records a request")))))
     },
+    suite("v1")(vcrTest("same label")(create)(get(_, "/json").as(assertCompletes))),
+    suite("v2")(vcrTest("same label")(create)(get(_, "/json").as(assertCompletes))),
+    test("tests with the same label in different suites get separate recordings") {
+      for {
+        v1 <- testNames("v1-same-label.json")
+        v2 <- testNames("v2-same-label.json")
+      } yield assertTrue(v1 == Some(Vector(Some("v1 / same label"))), v2 == Some(Vector(Some("v2 / same label"))))
+    },
     test("recordings are replayed by later clients for the same test") {
       for {
         hits     <- ZIO.succeed(server.hits)

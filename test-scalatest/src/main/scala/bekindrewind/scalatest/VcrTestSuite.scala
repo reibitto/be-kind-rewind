@@ -41,12 +41,12 @@ trait VcrTestSuite extends TestSuite with VcrTestSupport {
       try use(client)
       catch {
         case NonFatal(e) =>
-          try client.save(succeeded = false)
+          try vcrSave(client, succeeded = false)
           catch { case NonFatal(saveError) => e.addSuppressed(saveError) }
           throw e
       }
 
-    client.save()
+    vcrSave(client, succeeded = true)
     result
   }
 }
@@ -67,7 +67,7 @@ trait AsyncVcrTestSuite extends AsyncTestSuite with VcrTestSupport {
   def withVcr[C <: VcrClient, A](create: VcrTestContext => C)(use: C => Future[A]): Future[A] = {
     val client = create(vcrContext(VcrTestSuite.testName(currentTestName.value)))
     Future.fromTry(Try(use(client))).flatten.transform { result =>
-      Try(client.save(result.isSuccess)).flatMap(_ => result)
+      Try(vcrSave(client, result.isSuccess)).flatMap(_ => result)
     }
   }
 }

@@ -53,6 +53,11 @@ trait VcrClient {
     if (matcher.shouldRecord(vcrRequest)) recording.resolve(matcher, vcrRequest)
     else currentRecording.fold[VcrAction](VcrAction.PassThrough)(_.resolve(matcher, vcrRequest))
 
+  /** See [[VcrRecording.resolveUnrecordable]]. */
+  def resolveUnrecordable(vcrRequest: VcrRequest, reason: String): VcrAction =
+    if (matcher.shouldRecord(vcrRequest)) recording.resolveUnrecordable(matcher, vcrRequest, reason)
+    else currentRecording.fold[VcrAction](VcrAction.PassThrough)(_.resolveUnrecordable(matcher, vcrRequest, reason))
+
   private def currentRecording: Option[VcrRecording] =
     storage match {
       case shared: SharedRecordingStorage => shared.currentRecording
@@ -65,8 +70,8 @@ trait VcrClient {
   /** Saves recordings, treating the test (if any) as successful. */
   def save(): Unit = save(succeeded = true)
 
-  /** See [[VcrRecording.save]]. */
-  def save(succeeded: Boolean): Unit = recording.save(succeeded)
+  /** See [[VcrRecording.save]]. Does nothing when no test of a `VcrSession` is running. */
+  def save(succeeded: Boolean): Unit = currentRecording.foreach(_.save(succeeded))
 }
 
 object VcrClient {
@@ -93,9 +98,17 @@ object VcrClient {
       s"Recording is disabled for `${request.method} ${request.uri}`. The HTTP request was not executed."
     )
 
-  def noMatchError(request: VcrRequest, mode: RecordMode): VcrException =
+  def noMatchError(request: VcrRequest, mode: RecordMode, expired: Boolean = false): VcrException = {
+    val problem =
+      if (expired) s"The recording of `${request.method} ${request.uri}` expired (see `expiresAfter`)"
+      else s"No recorded entry matches `${request.method} ${request.uri}`"
     new VcrException(
-      s"No recorded entry matches `${request.method} ${request.uri}` and record mode $mode doesn't allow recording " +
-        "new entries. The HTTP request was not executed."
+      s"$problem and record mode $mode doesn't allow recording new entries. The HTTP request was not executed."
+    )
+  }
+
+  def unrecordableError(request: VcrRequest, reason: String): VcrException =
+    new VcrException(
+      s"Cannot record `${request.method} ${request.uri}` because $reason. The HTTP request was not executed."
     )
 }

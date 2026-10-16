@@ -18,20 +18,23 @@ import scala.collection.immutable
  */
 final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptions) {
 
-  /** Entries loaded from storage. `None` if nothing was loaded (missing, expired, or in `RecordAll` mode). */
+  /** Entries loaded from storage. `None` if nothing was loaded (missing, empty, expired, or in `RecordAll` mode). */
   lazy val loaded: Option[VcrEntries] =
-    if (recordOptions.mode == RecordMode.RecordAll) None
-    else
-      storage.read() match {
-        case Left(error)    =>
-          throw new IllegalStateException("Failed to read VCR entries from storage", error)
-        case Right(entries) =>
-          // Entries expire together so that a test never mixes old and newly recorded responses.
-          val now = OffsetDateTime.now()
-          entries.filterNot { e =>
-            recordOptions.expiresAfter.exists(duration => e.entries.exists(_.recordedAt.plus(duration).isBefore(now)))
-          }
-      }
+    if (recordOptions.mode == RecordMode.RecordAll || expired) None else stored
+
+  private lazy val stored: Option[VcrEntries] =
+    storage.read() match {
+      case Left(error)    => throw new IllegalStateException("Failed to read VCR entries from storage", error)
+      case Right(entries) => entries.filter(_.entries.nonEmpty)
+    }
+
+  // Entries expire together so that a test never mixes old and newly recorded responses.
+  private lazy val expired: Boolean = {
+    val now = OffsetDateTime.now()
+    recordOptions.expiresAfter.exists { duration =>
+      stored.exists(_.entries.exists(_.recordedAt.plus(duration).isBefore(now)))
+    }
+  }
 
   private val groupsByMatcher = TrieMap.empty[VcrMatcher, Map[VcrKey, StatefulVcrEntries]]
 
@@ -49,7 +52,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
       matcher,
       loaded.fold(Map.empty[VcrKey, StatefulVcrEntries]) { entries =>
         entries.entries.zipWithIndex.groupBy { case (entry, _) => matcher.group(entry.request) }.map {
-          case (key, group) => key -> StatefulVcrEntries.create(group.map(_._1), group.map(_._2))
+          case (key, group) => key -> StatefulVcrEntries(group.map(_._1), group.map(_._2))
         }
       }
     )
@@ -70,11 +73,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
     matcher.group(request) match {
       case VcrKey.Ungrouped => None
       case key              =>
-        groups(matcher).get(key).flatMap { group =>
-          val next = claimNext(group)
-          next.foreach(_ => group.currentIndex.incrementAndGet())
-          next
-        }
+        groups(matcher).get(key).flatMap(claimNext)
     }
 
   /** Marks the group's first entry that hasn't been replayed yet (by any matcher) as replayed, and returns it. */
@@ -101,9 +100,28 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
           recordOptions.mode match {
             case RecordMode.Once if loaded.isEmpty => VcrAction.Record
             case RecordMode.NewEpisodes            => VcrAction.Record
-            case mode                              => VcrAction.Fail(VcrClient.noMatchError(matcher.redact(request), mode))
+            case mode                              =>
+              VcrAction.Fail(VcrClient.noMatchError(matcher.redact(request), mode, expired))
           }
       }
+
+  /**
+   * Like [[resolve]], for requests that can't be recorded (such as ones with streaming bodies). They're sent as is
+   * unless the record mode only allows replaying or `notRecordedThrowsErrors` is set.
+   */
+  def resolveUnrecordable(matcher: VcrMatcher, request: VcrRequest, reason: String): VcrAction =
+    if (!matcher.shouldRecord(request)) resolve(matcher, request)
+    else {
+      val replayOnly = recordOptions.mode match {
+        case RecordMode.ReplayOnly => true
+        case RecordMode.Once       => loaded.isDefined
+        case _                     => false
+      }
+
+      if (replayOnly || recordOptions.notRecordedThrowsErrors)
+        VcrAction.Fail(VcrClient.unrecordableError(matcher.redact(request), reason))
+      else VcrAction.PassThrough
+    }
 
   /**
    * Previously recorded entries that haven't been replayed (so far), in the order they were recorded. This includes
@@ -141,8 +159,9 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
     val updated = VcrEntries(kept ++ newEntries, BuildInfo.version)
 
     if (!lastSaved.get.contains(updated)) {
+      // `RecordAll` doesn't load entries, so it only writes to clear old entries when there are some.
       val shouldWrite = newEntries.nonEmpty ||
-        recordOptions.mode == RecordMode.RecordAll ||
+        (recordOptions.mode == RecordMode.RecordAll && storage.read().fold(_ => true, _.exists(_.entries.nonEmpty))) ||
         loaded.exists(_.copy(version = updated.version) != updated)
 
       if (shouldWrite) storage.write(updated)

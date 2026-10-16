@@ -203,4 +203,26 @@ class VcrHttpSpec extends FunSuite {
       assertEquals(server.hits, 0)
     }
   }
+
+  server.test("Content-Type is recorded as a header and replayed on the entity only") { server =>
+    val storage = new InMemoryVcrStorage()
+    val request = HttpRequest(
+      HttpMethods.POST,
+      uri = server.url("/echo"),
+      entity = HttpEntity(ContentTypes.`application/json`, """{"a":1}""")
+    )
+
+    val recorder = VcrHttp.useClassicActorSystem(storage)
+    for {
+      _        <- recorder.send(request).flatMap(bodyOf)
+      _         = recorder.close()
+      replayed <- VcrHttp.useClassicActorSystem(storage).send(request)
+    } yield {
+      val entry = storage.read().toOption.flatten.map(_.entries.head).getOrElse(fail("should be recorded"))
+      assertEquals(entry.request.headers.get("Content-Type"), Some(Seq("application/json")))
+      assert(entry.response.headers.contains("Content-Type"), entry.response.headers.toString)
+      assert(cached(replayed))
+      assert(!replayed.headers.exists(_.is("content-type")), replayed.headers.toString)
+    }
+  }
 }

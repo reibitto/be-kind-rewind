@@ -187,4 +187,24 @@ class VcrStandaloneWSClientSpec extends FunSuite {
       assertEquals(server.hits, 0)
     }
   }
+
+  server.test("Streamed responses are recorded and replayed") { server =>
+    val storage  = new InMemoryVcrStorage()
+    val recorder = client(storage)
+
+    def body(response: StandaloneWSResponse) = response.bodyAsSource.runFold(ByteString.empty)(_ ++ _).map(_.utf8String)
+
+    for {
+      recorded     <- recorder.url(server.url("/json")).withMethod("GET").stream()
+      recordedBody <- body(recorded)
+      _             = recorder.close()
+      replayed     <- client(storage).url(server.url("/json")).withMethod("GET").stream()
+      replayedBody <- body(replayed)
+    } yield {
+      assertEquals(recordedBody, """{"hello":"world","unicode":"日本語"}""")
+      assertEquals(replayedBody, recordedBody)
+      assert(cached(replayed))
+      assertEquals(server.hits, 1)
+    }
+  }
 }

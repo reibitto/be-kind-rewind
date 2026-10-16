@@ -18,18 +18,19 @@ import scala.util.control.NonFatal
  */
 trait VcrSessionSuite extends VcrTestSuite {
   override protected def withFixture(test: NoArgTest): Outcome = {
-    vcrSession.start(vcrContext(test.name))
+    val context = vcrContext(test.name)
+    vcrSession.start(context)
 
     val outcome =
       try super.withFixture(test)
       catch {
         case NonFatal(e) =>
-          try vcrSession.finish(succeeded = false)
+          try vcrSession.finish(context, succeeded = false)
           catch { case NonFatal(saveError) => e.addSuppressed(saveError) }
           throw e
       }
 
-    vcrSession.finish(outcome.isSucceeded)
+    vcrSession.finish(context, outcome.isSucceeded)
     outcome
   }
 }
@@ -37,16 +38,17 @@ trait VcrSessionSuite extends VcrTestSuite {
 /** [[VcrSessionSuite]] for async suites such as `AsyncFunSuite`. */
 trait AsyncVcrSessionSuite extends AsyncVcrTestSuite {
   override def withFixture(test: NoArgAsyncTest): FutureOutcome = {
-    vcrSession.start(vcrContext(test.name))
+    val context = vcrContext(test.name)
+    vcrSession.start(context)
 
     val outcome =
       try super.withFixture(test)
       catch {
         case NonFatal(e) =>
-          vcrSession.finish(succeeded = false)
+          vcrSession.finish(context, succeeded = false)
           throw e
       }
 
-    outcome.onCompletedThen(result => vcrSession.finish(result.toOption.exists(_.isSucceeded)))
+    outcome.onCompletedThen(result => vcrSession.finish(context, result.toOption.exists(_.isSucceeded)))
   }
 }

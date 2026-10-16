@@ -130,4 +130,42 @@ class VcrBackendSpec extends FunSuite {
     assert(headers.exists(h => !h.contains("content-encoding") && !h.contains("content-length")), headers.toString)
     assertEquals(request.send(backend(storage)).body, Right("""{"compressed":true}"""))
   }
+
+  server.test("Input stream and ignored responses record the body and replay like they were recorded") { server =>
+    val storage = new InMemoryVcrStorage()
+    val stream  = basicRequest
+      .get(uri"${server.uri("/json")}")
+      .response(asInputStreamAlways(in => new String(in.readAllBytes(), StandardCharsets.UTF_8)))
+    val ignored = basicRequest.get(uri"${server.uri("/counter")}").response(ignore)
+
+    val recorder = backend(storage)
+    val recorded = stream.send(recorder).body
+    ignored.send(recorder)
+    recorder.close()
+
+    assertEquals(recorded, """{"hello":"world","unicode":"日本語"}""")
+    assertEquals(stream.send(backend(storage)).body, recorded)
+    assertEquals(storage.read().toOption.flatten.map(_.entries.map(_.response.body)), Some(Vector(recorded, "1")))
+  }
+
+  server.test("Multipart requests fail in ReplayOnly without being sent") { server =>
+    val vcr = backend(new InMemoryVcrStorage(), RecordOptions.default.mode(RecordMode.ReplayOnly))
+
+    val error = intercept[VcrException](
+      basicRequest.post(uri"${server.uri("/echo")}").multipartBody(multipart("a", "b")).send(vcr)
+    )
+    assert(error.getMessage.contains("Cannot record"), error.getMessage)
+    assertEquals(server.hits, 0)
+  }
+
+  server.test("close fails when saving fails") { server =>
+    val storage = new InMemoryVcrStorage()
+    val request = basicRequest.get(uri"${server.uri("/json")}")
+
+    val recorder = backend(storage)
+    request.send(recorder)
+    recorder.close()
+
+    intercept[VcrException](backend(storage, RecordOptions.default.unusedEntries(UnusedEntries.Fail)).close())
+  }
 }

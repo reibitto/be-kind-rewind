@@ -24,7 +24,7 @@ class TestScopedStorageSpec extends FunSuite {
 
   test("Only the test's own entries are read") {
     assertEquals(shared().scopedToTest("a").read().map(_.map(_.entries)), Right(Some(Vector(a1, a2))))
-    assertEquals(shared().scopedToTest("c").read().map(_.map(_.entries)), Right(Some(Vector.empty)))
+    assertEquals(shared().scopedToTest("c").read(), Right(None))
   }
 
   test("Writing replaces only the test's entries, in place") {

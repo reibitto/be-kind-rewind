@@ -29,18 +29,14 @@ class VcrBackend[F[_], P](
 
   override def send[T, R >: P with capabilities.Effect[F]](request: Request[T, R]): F[Response[T]] =
     monad.flatten(monad.eval {
-      bufferBody(request) match {
+      bufferBody(request).filter(_ => replayable(request.response)) match {
+        case Some((bufferedRequest, bytes)) => sendBuffered(bufferedRequest, bytes)
         case None                           =>
-          // Streaming and multipart bodies can't be recorded.
-          if (recordOptions.notRecordedThrowsErrors)
-            monad.error[Response[T]](
-              new VcrException(
-                s"Cannot record `${request.method} ${request.uri}` because its body is a stream or multipart."
-              )
-            )
-          else underlyingBackend.send(request)
-        case Some((bufferedRequest, bytes)) =>
-          sendBuffered(bufferedRequest, bytes)
+          val vcrRequest = toVcrRequest(request, Array.emptyByteArray)
+          resolveUnrecordable(vcrRequest, "its body or response is a stream, multipart or a web socket") match {
+            case VcrAction.Fail(error) => monad.error[Response[T]](error)
+            case _                     => underlyingBackend.send(request)
+          }
       }
     })
 
@@ -48,13 +44,7 @@ class VcrBackend[F[_], P](
     request: Request[T, R],
     body: Array[Byte]
   ): F[Response[T]] = {
-    val vcrRequest = VcrRequest.fromBytes(
-      request.method.method,
-      request.uri.toJavaUri,
-      body,
-      toPlainHeaders(request.headers),
-      request.httpVersion.map(showHttpVersion)
-    )
+    val vcrRequest = toVcrRequest(request, body)
 
     resolve(vcrRequest) match {
       case VcrAction.Replay(entry) =>
@@ -76,8 +66,9 @@ class VcrBackend[F[_], P](
           )
         }
 
+      // The body is read as bytes and then converted the same way as when replaying, so both behave the same.
       case VcrAction.Record =>
-        request.response(asBothOption(request.response, asByteArrayAlways)).send(underlyingBackend).map { response =>
+        request.response(asByteArrayAlways).send(underlyingBackend).map { response =>
           addNewEntry(
             VcrEntry(
               vcrRequest,
@@ -85,7 +76,7 @@ class VcrBackend[F[_], P](
                 response.code.code,
                 response.statusText,
                 toPlainHeaders(recordedHeaders(response.headers, decompressed = !request.autoDecompressionDisabled)),
-                response.body._2.getOrElse(Array.emptyByteArray),
+                response.body,
                 response.contentType,
                 None // sttp doesn't expose the protocol version of responses
               ),
@@ -93,7 +84,7 @@ class VcrBackend[F[_], P](
             )
           )
 
-          response.copy(body = response.body._1)
+          response.copy(body = bodyFromResponseAs.apply[T](request.response, response, Left(response.body)))
         }
 
       case VcrAction.PassThrough => underlyingBackend.send(request)
@@ -102,9 +93,10 @@ class VcrBackend[F[_], P](
     }
   }
 
+  /** Closes the underlying backend, then fails if saving failed (e.g. because of unused entries). */
   def close(): F[Unit] = {
-    Try(save()).failed.foreach(_.printStackTrace())
-    underlyingBackend.close()
+    val saved = Try(save())
+    underlyingBackend.close().flatMap(_ => saved.fold(monad.error[Unit], _ => monad.unit(())))
   }
 
   def responseMonad: MonadError[F] = monad
@@ -118,6 +110,26 @@ object VcrBackend {
     matcher: VcrMatcher = VcrMatcher.default
   ): VcrBackend[F, P] =
     new VcrBackend[F, P](underlyingClient, storage, recordOptions, matcher)
+
+  private def toVcrRequest(request: RequestT[Identity, _, _], body: Array[Byte]): VcrRequest =
+    VcrRequest.fromBytes(
+      request.method.method,
+      request.uri.toJavaUri,
+      body,
+      toPlainHeaders(request.headers),
+      request.httpVersion.map(showHttpVersion)
+    )
+
+  /** Whether responses of this type can be replayed from recorded bytes (streams and web sockets can't). */
+  private def replayable(responseAs: ResponseAs[_, _]): Boolean =
+    responseAs match {
+      case _: ResponseAsStream[_, _, _, _] | _: ResponseAsStreamUnsafe[_, _] | _: WebSocketResponseAs[_, _] => false
+      case ResponseAsFromMetadata(conditions, default)                                                      =>
+        conditions.forall(c => replayable(c.responseAs)) && replayable(default)
+      case MappedResponseAs(raw, _, _)                                                                      => replayable(raw)
+      case ResponseAsBoth(l, r)                                                                             => replayable(l) && replayable(r)
+      case _                                                                                                => true
+    }
 
   /**
    * Returns the request body as a string along with a request that can still be sent (one-shot bodies like input

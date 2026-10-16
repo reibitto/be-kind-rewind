@@ -187,4 +187,32 @@ class VcrSessionSpec extends FunSuite {
       Some(entry())
     )
   }
+
+  tempDir.test("Contexts created for the running session test share its recording") { dir =>
+    val support = new Support(dir)
+    val context = support.vcrContext("a")
+    support.vcrSession.start(context)
+
+    assert(support.vcrContext("a") eq context)
+    assert(!(support.vcrContext("b") eq context))
+    support.vcrSession.finish(succeeded = true)
+  }
+
+  tempDir.test("Finishing a test that's no longer running does nothing") { dir =>
+    val support  = new Support(dir)
+    val timedOut = support.vcrContext("timed out")
+    support.vcrSession.start(timedOut)
+    support.vcrSession.finish(timedOut, succeeded = false)
+
+    val next = support.vcrContext("next")
+    support.vcrSession.start(next)
+    support.vcrSession.finish(timedOut, succeeded = true)
+    assertEquals(support.vcrSession.current, Some(next))
+    support.vcrSession.finish(next, succeeded = true)
+    assertEquals(support.vcrSession.current, None)
+  }
+
+  tempDir.test("Saving a session client without a running test does nothing") { dir =>
+    new Support(dir).vcrSession.client(VcrMatcher.default).save()
+  }
 }

@@ -2,7 +2,7 @@ package bekindrewind.testkit
 
 import bekindrewind.codec.Codec
 import bekindrewind.storage.{ FileVcrStorage, SharedRecordingStorage }
-import bekindrewind.{ RecordMode, RecordOptions }
+import bekindrewind.{ RecordMode, RecordOptions, VcrClient }
 
 import java.nio.file.{ Files, Path, Paths }
 import scala.collection.concurrent.TrieMap
@@ -45,7 +45,20 @@ trait VcrTestSupport {
   /** Tracks the running test for clients created outside of tests. See [[VcrSession]]. */
   lazy val vcrSession: VcrSession = new VcrSession(vcrSuiteName)
 
-  def vcrContext(testName: String): VcrTestContext = {
+  /**
+   * The context for the named test. While that test is the running [[VcrSession]] test, its context is returned, so
+   * that clients created for the test share the session's recording.
+   */
+  def vcrContext(testName: String): VcrTestContext =
+    vcrSession.current.filter(_.testName == testName).getOrElse(newVcrContext(testName))
+
+  /**
+   * Saves a client created for a test, unless it records to the running `VcrSession` test, which saves when it ends.
+   */
+  protected def vcrSave(client: VcrClient, succeeded: Boolean): Unit =
+    if (!vcrSession.current.exists(_.recording eq client.recording)) client.save(succeeded)
+
+  private def newVcrContext(testName: String): VcrTestContext = {
     val naming    = vcrFileNaming
     val extension = vcrCodec.fileExtension
 

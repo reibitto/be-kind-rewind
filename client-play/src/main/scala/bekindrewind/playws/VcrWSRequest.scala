@@ -105,7 +105,8 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
         )(owner.materializer)
     }
 
-  override def stream(): Future[Response] = req.stream()
+  // The response is buffered so that it can be recorded. Its body can still be read with `bodyAsSource`.
+  override def stream(): Future[Response] = execute()
 
   override def withHeaders(headers: (String, String)*): VcrWSRequest = req.withHttpHeaders(headers: _*)
 

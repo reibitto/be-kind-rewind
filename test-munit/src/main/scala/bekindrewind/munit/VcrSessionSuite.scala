@@ -21,14 +21,21 @@ trait VcrSessionSuite extends VcrSuite {
       "vcrSession",
       test =>
         test.withBody { () =>
-          vcrSession.start(vcrContext(test.name))
+          // munit runs a suite's tests one at a time, so a test that's still running timed out.
+          vcrSession.current.foreach { timedOut =>
+            System.err.println(s"[be-kind-rewind] Finishing VCR test `${timedOut.testName}`, which timed out")
+            vcrSession.finish(timedOut, succeeded = false)
+          }
+
+          val context = vcrContext(test.name)
+          vcrSession.start(context)
 
           val result =
             try test.body()
             catch { case NonFatal(e) => Future.failed(e) }
 
           result.transform { outcome =>
-            scala.util.Try(vcrSession.finish(outcome.isSuccess)).flatMap(_ => outcome)
+            scala.util.Try(vcrSession.finish(context, outcome.isSuccess)).flatMap(_ => outcome)
           }(munitExecutionContext)
         }
     )

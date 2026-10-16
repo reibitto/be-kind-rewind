@@ -21,7 +21,8 @@ class FileVcrStorage(val path: Path, val codec: Codec, val charset: Charset) ext
     val directory = Option(path.toAbsolutePath.getParent).getOrElse(Paths.get(""))
     Files.createDirectories(directory)
 
-    val temp = Files.createTempFile(directory, s".${path.getFileName}", ".tmp")
+    // A short name, since a long recording name plus the random suffix could exceed Windows path limits.
+    val temp = Files.createTempFile(directory, ".vcr", ".tmp")
     try {
       Files.write(temp, codec.encode(entries).getBytes(charset))
       try Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)

@@ -37,7 +37,7 @@ trait VcrSuite extends FunSuite with VcrTestSupport {
         saveOnFailure(client)(body(client)) match {
           case future: Future[_] => saveOnCompletion(client, future)
           case result            =>
-            client.save()
+            vcrSave(client, succeeded = true)
             result
         }
       }
@@ -50,7 +50,7 @@ trait VcrSuite extends FunSuite with VcrTestSupport {
   def withVcr[C <: VcrClient, A](testName: String)(create: VcrTestContext => C)(use: C => A): A = {
     val client = create(vcrContext(testName))
     val result = saveOnFailure(client)(use(client))
-    client.save()
+    vcrSave(client, succeeded = true)
     result
   }
 
@@ -64,11 +64,11 @@ trait VcrSuite extends FunSuite with VcrTestSupport {
     try use
     catch {
       case NonFatal(e) =>
-        try client.save(succeeded = false)
+        try vcrSave(client, succeeded = false)
         catch { case NonFatal(saveError) => e.addSuppressed(saveError) }
         throw e
     }
 
   private def saveOnCompletion[A](client: VcrClient, future: Future[A]): Future[A] =
-    future.transform(outcome => Try(client.save(outcome.isSuccess)).flatMap(_ => outcome))(munitExecutionContext)
+    future.transform(outcome => Try(vcrSave(client, outcome.isSuccess)).flatMap(_ => outcome))(munitExecutionContext)
 }

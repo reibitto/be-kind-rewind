@@ -110,7 +110,7 @@ object PlayVcr {
       res.statusText,
       res.headers.map { case (k, v) => (k, v.toSeq) },
       res.bodyAsBytes.toArray,
-      Some(res.contentType),
+      res.header("Content-Type"), // `res.contentType` defaults to application/octet-stream when there's none
       httpVersion
     )
 }

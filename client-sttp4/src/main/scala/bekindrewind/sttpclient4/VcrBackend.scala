@@ -41,26 +41,28 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
 
   override def send[T](request: GenericRequest[T, R]): F[Response[T]] =
     monad.suspend {
-      (bufferBody(request), withRecording(request)) match {
-        case (Some((bufferedRequest, bytes)), Some(_)) => sendBuffered(bufferedRequest, bytes)
-        case _                                         =>
-          // Web socket requests, streaming and multipart bodies can't be recorded.
-          if (recordOptions.notRecordedThrowsErrors)
-            monad.error[Response[T]](
-              new VcrException(s"Cannot record `${request.method} ${request.uri}` (web socket, stream or multipart).")
-            )
-          else delegate.send(request)
+      // Only requests with a regular (not streaming or web socket) response can be recorded.
+      request match {
+        case r: Request[T @unchecked] =>
+          bufferBody(r) match {
+            case Some((bufferedRequest, bytes)) => sendBuffered(bufferedRequest, bytes)
+            case None                           => sendUnrecordable(request)
+          }
+        case _                        => sendUnrecordable(request)
       }
     }
 
-  private def sendBuffered[T](request: GenericRequest[T, R], body: Array[Byte]): F[Response[T]] = {
-    val vcrRequest = VcrRequest.fromBytes(
-      request.method.method,
-      request.uri.toJavaUri,
-      body,
-      toPlainHeaders(request.headers),
-      request.httpVersion.map(showHttpVersion)
-    )
+  private def sendUnrecordable[T](request: GenericRequest[T, R]): F[Response[T]] =
+    resolveUnrecordable(
+      toVcrRequest(request, Array.emptyByteArray),
+      "it's a web socket, stream or multipart request"
+    ) match {
+      case VcrAction.Fail(error) => monad.error[Response[T]](error)
+      case _                     => delegate.send(request)
+    }
+
+  private def sendBuffered[T](request: Request[T], body: Array[Byte]): F[Response[T]] = {
+    val vcrRequest = toVcrRequest(request, body)
 
     resolve(vcrRequest) match {
       case VcrAction.Replay(entry) =>
@@ -75,30 +77,27 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
           Response(body, meta.code, meta.statusText, meta.headers, Nil, request.onlyMetadata)
         }
 
+      // The body is read as bytes and then converted the same way as when replaying, so both behave the same.
       case VcrAction.Record =>
-        withRecording(request) match {
-          case Some(recordingRequest) =>
-            delegate.send(recordingRequest).map { response =>
-              addNewEntry(
-                VcrEntry(
-                  vcrRequest,
-                  VcrResponse.fromBytes(
-                    response.code.code,
-                    response.statusText,
-                    toPlainHeaders(
-                      recordedHeaders(response.headers, decompressed = request.options.decompressResponseBody)
-                    ),
-                    response.body._2.getOrElse(Array.emptyByteArray),
-                    response.contentType,
-                    None // sttp doesn't expose the protocol version of responses
-                  ),
-                  OffsetDateTime.now
-                )
-              )
+        delegate.send(request.response(asByteArrayAlways)).map { response =>
+          addNewEntry(
+            VcrEntry(
+              vcrRequest,
+              VcrResponse.fromBytes(
+                response.code.code,
+                response.statusText,
+                toPlainHeaders(
+                  recordedHeaders(response.headers, decompressed = request.options.decompressResponseBody)
+                ),
+                response.body,
+                response.contentType,
+                None // sttp doesn't expose the protocol version of responses
+              ),
+              OffsetDateTime.now
+            )
+          )
 
-              response.copy(body = response.body._1)
-            }
-          case None                   => delegate.send(request)
+          response.copy(body = bodyFromResponseAs.apply[T](request.response, response, Left(response.body)))
         }
 
       case VcrAction.PassThrough => delegate.send(request)
@@ -107,9 +106,10 @@ abstract class VcrBackend[F[_], P] private (delegate: GenericBackend[F, P], sett
     }
   }
 
+  /** Closes the underlying backend, then fails if saving failed (e.g. because of unused entries). */
   override def close(): F[Unit] = {
-    Try(save()).failed.foreach(_.printStackTrace())
-    delegate.close()
+    val saved = Try(save())
+    delegate.close().flatMap(_ => saved.fold(monad.error[Unit], _ => monad.unit(())))
   }
 }
 
@@ -135,20 +135,20 @@ object VcrBackend {
   ): WebSocketStreamBackend[F, S] with VcrClient =
     new VcrBackend(delegate, settings) with WebSocketStreamBackend[F, S] {}
 
-  /** Returns a copy of the request that also returns the raw response body, or `None` for web socket requests. */
-  private def withRecording[T, R](request: GenericRequest[T, R]): Option[GenericRequest[(T, Option[Array[Byte]]), R]] =
-    request match {
-      case r: Request[T @unchecked]                     => Some(r.response(asBothOption(r.response, asByteArrayAlways)))
-      case r: StreamRequest[T @unchecked, R @unchecked] =>
-        Some(r.response(asBothOption(r.response, asByteArrayAlways)))
-      case _                                            => None
-    }
+  private def toVcrRequest(request: GenericRequest[_, _], body: Array[Byte]): VcrRequest =
+    VcrRequest.fromBytes(
+      request.method.method,
+      request.uri.toJavaUri,
+      body,
+      toPlainHeaders(request.headers),
+      request.httpVersion.map(showHttpVersion)
+    )
 
   /**
    * Returns the request body along with a request that can still be sent (one-shot bodies like input streams are
    * replaced with the bytes that were read). Returns `None` for bodies that can't be buffered.
    */
-  private def bufferBody[T, R](request: GenericRequest[T, R]): Option[(GenericRequest[T, R], Array[Byte])] =
+  private def bufferBody[T](request: Request[T]): Option[(Request[T], Array[Byte])] =
     request.body match {
       case NoBody                    => Some((request, Array.emptyByteArray))
       case StringBody(s, charset, _) => Some((request, s.getBytes(charset)))

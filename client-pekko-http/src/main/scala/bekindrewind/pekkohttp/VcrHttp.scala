@@ -44,7 +44,7 @@ object VcrHttp {
       method = request.method.value,
       uri = URI.create(request.uri.toString()),
       body = body.toArray,
-      headers = toVcrHeaders(request.headers),
+      headers = withContentType(toVcrHeaders(request.headers), request.entity),
       httpVersion = Some(request.protocol.value)
     )
 
@@ -52,7 +52,7 @@ object VcrHttp {
     VcrResponse.fromBytes(
       statusCode = response.status.intValue(),
       statusText = response.status.reason(),
-      headers = toVcrHeaders(response.headers),
+      headers = withContentType(toVcrHeaders(response.headers), response.entity),
       body = body.toArray,
       contentType = showContentType(response.entity.contentType),
       httpVersion = Some(response.protocol.value)
@@ -81,12 +81,18 @@ object VcrHttp {
   private[pekkohttp] def showContentType(contentType: ContentType): Option[String] =
     if (contentType == ContentTypes.NoContentType) None else Some(contentType.value)
 
+  // Pekko keeps Content-Type on the entity, but other clients (and header matchers) expect it as a header.
+  private def withContentType(headers: Map[String, Seq[String]], entity: HttpEntity): Map[String, Seq[String]] =
+    showContentType(entity.contentType).fold(headers)(value => headers + ("Content-Type" -> Seq(value)))
+
   private[pekkohttp] def toVcrHeaders(headers: Seq[HttpHeader]): Map[String, Seq[String]] =
     headers.groupBy(_.name()).map { case (name, headers) => name -> headers.map(_.value()) }
 
+  // Content-Type and Content-Length come from the entity. Pekko ignores them as headers, with a warning.
   private[pekkohttp] def toPekkoHeaders(headers: Map[String, Seq[String]]): immutable.Seq[HttpHeader] =
     (for {
       (key, group) <- headers.iterator
+      if !key.equalsIgnoreCase("Content-Type") && !key.equalsIgnoreCase("Content-Length")
       value        <- group.iterator
     } yield HttpHeader.parse(key, value)).collect { case HttpHeader.ParsingResult.Ok(header, _) =>
       header

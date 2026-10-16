@@ -55,7 +55,9 @@ object VcrStorage {
       entry.testName.contains(name) || (includeUnlabeled && entry.testName.isEmpty)
 
     override def read(): Either[Throwable, Option[VcrEntries]] =
-      underlying.synchronized(underlying.read()).map(_.map(e => e.copy(entries = e.entries.filter(belongs))))
+      underlying
+        .synchronized(underlying.read())
+        .map(_.map(e => e.copy(entries = e.entries.filter(belongs))).filter(_.entries.nonEmpty))
 
     override def write(entries: VcrEntries): Unit =
       underlying.synchronized {

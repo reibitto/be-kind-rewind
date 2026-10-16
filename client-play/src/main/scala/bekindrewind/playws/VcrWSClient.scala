@@ -22,9 +22,11 @@ class VcrWSClient(
   override def url(url: String): WSRequest =
     new VcrWSRequest(underlyingClient.url(url), this)
 
+  /** Closes the underlying client, then rethrows any error from saving (e.g. because of unused entries). */
   override def close(): Unit = {
-    Try(save()).failed.foreach(_.printStackTrace())
+    val saved = Try(save())
     underlyingClient.close()
+    saved.get
   }
 }
 

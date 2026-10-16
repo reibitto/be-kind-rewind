@@ -66,7 +66,7 @@ class VcrClientSpec extends FunSuite {
       case None           => fail("Should load the VCR entry")
       case Some(previous) =>
         assertEquals(previous.entries, Vector(entry()))
-        assertEquals(previous.currentIndex.get(), 0)
+        assertEquals(previous.positions, Vector(0))
     }
   }
 
@@ -200,9 +200,9 @@ class VcrClientSpec extends FunSuite {
     intercept[IllegalStateException](client.save())
   }
 
-  test("Storage isn't read in RecordAll mode") {
+  test("Storage isn't read for replaying in RecordAll mode") {
     val failing = new VcrStorage {
-      override def read(): Either[Throwable, Option[VcrEntries]] = fail("should not read")
+      override def read(): Either[Throwable, Option[VcrEntries]] = Left(new RuntimeException("corrupt file"))
 
       override def write(entries: VcrEntries): Unit = ()
     }
@@ -283,5 +283,64 @@ class VcrClientSpec extends FunSuite {
 
     val replayer = MockClient(storage, RecordOptions.default, matcher)
     assertEquals(replayer.findMatch(live), Some(saved))
+  }
+
+  test("Once records for a test whose scoped storage only has other tests' entries") {
+    val shared = storageWith(entry().copy(testName = Some("other")))
+    val client = MockClient(shared.scopedToTest("new"), RecordOptions.default.mode(RecordMode.Once), VcrMatcher.default)
+
+    assertEquals(client.resolve(request()), VcrAction.Record)
+  }
+
+  test("RecordAll only writes when something was recorded or something was stored") {
+    val empty = new CountingStorage(new InMemoryVcrStorage())
+    MockClient(empty, RecordOptions.default.mode(RecordMode.RecordAll), VcrMatcher.default).save()
+    assertEquals(empty.writes.get(), 0)
+
+    val stored = new CountingStorage(storageWith(entry()))
+    MockClient(stored, RecordOptions.default.mode(RecordMode.RecordAll), VcrMatcher.default).save()
+    assertEquals(stored.writes.get(), 1)
+    assertEquals(stored.read().map(_.map(_.entries)), Right(Some(Vector.empty)))
+  }
+
+  test("ReplayOnly says when the recording expired") {
+    val options = RecordOptions.default.mode(RecordMode.ReplayOnly).expiresAfter(Duration.ofDays(1))
+
+    MockClient(storageWith(recordedDaysAgo(2)), options, VcrMatcher.default).resolve(request()) match {
+      case VcrAction.Fail(error) => assert(error.getMessage.contains("expired"), error.getMessage)
+      case action                => fail(s"Expected failure, got $action")
+    }
+  }
+
+  test("Unrecordable requests fail when only replaying is allowed and pass through otherwise") {
+    def resolve(options: RecordOptions, stored: VcrEntry*) = {
+      val storage = if (stored.isEmpty) new InMemoryVcrStorage() else storageWith(stored: _*)
+      MockClient(storage, options, VcrMatcher.default).resolveUnrecordable(request(), "it's a stream")
+    }
+
+    assertEquals(resolve(RecordOptions.default), VcrAction.PassThrough)
+    assertEquals(resolve(RecordOptions.default.mode(RecordMode.Once)), VcrAction.PassThrough)
+    assertEquals(resolve(RecordOptions.default.mode(RecordMode.RecordAll)), VcrAction.PassThrough)
+    assert(resolve(RecordOptions.default.mode(RecordMode.Once), entry()).isInstanceOf[VcrAction.Fail])
+    assert(resolve(RecordOptions.default.notRecordedThrowsErrors(true)).isInstanceOf[VcrAction.Fail])
+
+    resolve(RecordOptions.default.mode(RecordMode.ReplayOnly)) match {
+      case VcrAction.Fail(error) => assert(error.getMessage.contains("because it's a stream"), error.getMessage)
+      case action                => fail(s"Expected failure, got $action")
+    }
+  }
+
+  test("Errors for requests no combined matcher accepts are redacted by every matcher") {
+    val matcher = VcrMatcher.default.withShouldRecord(_ => false).redactQueryParams("api_key") :+
+      VcrMatcher.default.withShouldRecord(_ => false).redactHeaders("Authorization")
+    val live    = request(uri = "https://example.com/data?api_key=supersecret123")
+      .copy(headers = Map("Authorization" -> Seq("Bearer supersecret456")))
+
+    MockClient(new InMemoryVcrStorage(), RecordOptions.default.notRecordedThrowsErrors(true), matcher)
+      .resolve(live) match {
+      case VcrAction.Fail(error) => assert(!error.getMessage.contains("supersecret"), error.getMessage)
+      case action                => fail(s"Expected failure, got $action")
+    }
+    assertEquals(matcher.redact(live).headers, Map("Authorization" -> Seq("REDACTED")))
   }
 }

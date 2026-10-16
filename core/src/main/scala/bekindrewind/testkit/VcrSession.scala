@@ -17,17 +17,21 @@ final class VcrSession(val suiteName: String) {
   private val active = new AtomicReference[Option[VcrTestContext]](None)
 
   def start(context: VcrTestContext): Unit =
-    active.getAndSet(Some(context)).foreach { previous =>
-      active.set(Some(previous))
+    if (!active.compareAndSet(None, Some(context)))
       throw new IllegalStateException(
-        s"VCR test `${context.testName}` started while `${previous.testName}` is still running in $suiteName. " +
-          "Tests using a VcrSession must run one at a time."
+        s"VCR test `${context.testName}` started while `${current.fold("another test")(_.testName)}` is still " +
+          s"running in $suiteName. Tests using a VcrSession must run one at a time."
       )
-    }
 
   /** Saves the running test's recording. */
   def finish(succeeded: Boolean): Unit =
     active.getAndSet(None).foreach(_.recording.save(succeeded))
+
+  /** Saves the test's recording if it's still the running test. Does nothing otherwise (e.g. after it timed out). */
+  def finish(context: VcrTestContext, succeeded: Boolean): Unit = {
+    val running = active.get
+    if (running.exists(_ eq context) && active.compareAndSet(running, None)) context.recording.save(succeeded)
+  }
 
   def current: Option[VcrTestContext] = active.get()
 

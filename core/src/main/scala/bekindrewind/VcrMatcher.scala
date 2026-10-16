@@ -221,7 +221,9 @@ object VcrMatcher {
 
     override def withRedaction(rules: Redaction.Rules): VcrMatcher = mapEach(_.withRedaction(rules))
 
-    override def redact(request: VcrRequest): VcrRequest = matcherFor(request).fold(request)(_.redact(request))
+    // Requests no matcher accepts aren't recorded, but every matcher's redaction applies to them in error messages.
+    override def redact(request: VcrRequest): VcrRequest =
+      matcherFor(request).fold(matchers.foldLeft(request)((r, m) => m.redaction.request(r)))(_.redact(request))
 
     private def mapEach(f: VcrMatcher.One => VcrMatcher.One): VcrMatcher = VcrMatcher.Many(matchers.map(f))
   }

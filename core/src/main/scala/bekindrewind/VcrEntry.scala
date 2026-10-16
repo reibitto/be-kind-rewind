@@ -2,7 +2,6 @@ package bekindrewind
 
 import java.net.URI
 import java.time.OffsetDateTime
-import java.util.concurrent.atomic.AtomicInteger
 
 /** @param testName Name of the test that recorded this entry, to make recordings easier to read. */
 final case class VcrEntry(
@@ -78,14 +77,9 @@ object VcrResponse {
 final case class VcrEntries(entries: Vector[VcrEntry], version: String)
 
 /**
- * A group of equivalent recorded entries and how many of them have been replayed.
+ * A group of equivalent recorded entries. Which of them have been replayed is tracked by the [[VcrRecording]].
  *
  * @param positions
  *   Where each entry is in the recording.
  */
-final case class StatefulVcrEntries(entries: Vector[VcrEntry], currentIndex: AtomicInteger, positions: Vector[Int])
-
-object StatefulVcrEntries {
-  def create(entries: Vector[VcrEntry], positions: Vector[Int]): StatefulVcrEntries =
-    StatefulVcrEntries(entries, new AtomicInteger(0), positions)
-}
+final case class StatefulVcrEntries(entries: Vector[VcrEntry], positions: Vector[Int])

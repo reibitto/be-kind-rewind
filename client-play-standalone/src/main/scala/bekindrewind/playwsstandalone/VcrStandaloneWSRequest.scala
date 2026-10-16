@@ -102,5 +102,6 @@ class VcrStandaloneWSRequest(req: StandaloneWSRequest, owner: VcrStandaloneWSCli
         )(owner.materializer)
     }
 
-  override def stream(): Future[Response] = req.stream()
+  // The response is buffered so that it can be recorded. Its body can still be read with `bodyAsSource`.
+  override def stream(): Future[Response] = execute()
 }

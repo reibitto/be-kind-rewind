@@ -162,7 +162,8 @@ object UserApiSpec extends ZIOSpecDefault with VcrSpec {
 }
 ```
 
-`withVcr(testName)(create)(use)` is also available.
+Tests are named after their labels below the root suite (e.g. `users / gets a user`), so that tests with the same label
+in different suites get separate recordings. `withVcr(testName)(create)(use)` is also available.
 
 ### Recording layout
 
@@ -221,7 +222,8 @@ object PaymentsSpec extends ZIOSpecDefault with VcrSessionSpec { ... }
 
 Every test in the suite then gets its own recording, and the record options come from the suite. Since there's only one
 running test per suite, its tests run one at a time. zio-test names tests after their labels below the root suite (e.g.
-`payments / creates a payment`) and numbers duplicate names.
+`payments / creates a payment`) and numbers duplicate names. Clients created inside a test with `withVcr` (or
+`vcrTest`) share the running test's recording.
 
 Requests made while no test is running fail, except those the matcher doesn't record (see
 [`shouldRecord`](#only-record-a-subset-of-http-requests)), which are sent as usual.
@@ -295,8 +297,9 @@ basicRequest.get(uri"https://postman-echo.com/get?a=1").send(vcrBackend)
 vcrBackend.close()
 ```
 
-Sync, async, streaming and WebSocket backends are supported. WebSocket requests are passed through without being
-recorded.
+Sync, async, streaming and WebSocket backends are supported. WebSocket requests and requests with streaming or
+multipart bodies or streaming responses can't be recorded. They're sent as usual, except in `ReplayOnly` (or `Once` with
+a recording), where they fail.
 </details>
 
 <details>
@@ -550,6 +553,9 @@ is saved. This is controlled by `RecordOptions.unusedEntries`:
 Unused entries are only handled when the test succeeded, since a failed test may not have made all of its requests.
 `Prune` only applies in `NewEpisodes` mode and when the recording belongs to a single test (which is always the case with
 the test framework integrations). Otherwise it behaves like `Warn`.
+
+Without a test framework integration, the recording is saved by the client's `close()` (or `save()`), which throws when
+`Fail` applies.
 
 ## Recordings
 
