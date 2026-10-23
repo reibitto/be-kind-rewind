@@ -48,14 +48,14 @@ Add the dependencies for your HTTP client and test framework (sttp and munit in 
 Then:
 
 ```scala
-import bekindrewind.munit.VcrSuite
+import bekindrewind.munitsuite.VcrSuite
 import bekindrewind.sttpclient.VcrBackend
 import sttp.client3._
 
 class UserApiSpec extends VcrSuite {
   val backend = HttpClientSyncBackend()
 
-  val vcrBackend = vcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions))
+  val vcrBackend = vcr(ctx => VcrBackend(backend, ctx.settings))
 
   // The first time you run this a real HTTP request will be sent and recorded to
   // src/test/resources/vcr/UserApiSpec/gets-a-user.json. The next time you run it, the
@@ -96,7 +96,12 @@ override def vcrDefaultRecordMode = RecordMode.ReplayOnly
 ```
 
 The context passed to the client factory (`ctx` in the examples) contains the test's `storage`, `recordOptions`,
-`testName`, `suiteName` and recording `path`.
+`testName`, `suiteName` and recording `path`, and `settings` to create clients with. Tests always use the suite's
+`vcrRecordOptions`: a client given different record options fails its requests, since they would be ignored.
+
+Clients of the same test that are open at the same time, such as nested `withVcr` calls, share the test's recording,
+which is saved once the last of them is done. Create all of a test's clients this way (or from one `ctx`) rather than
+with one `withVcr` after another, since a later client would report the entries an earlier one replayed as unused.
 
 ### munit
 
@@ -106,11 +111,14 @@ The context passed to the client factory (`ctx` in the examples) contains the te
 
 ```scala
 class UserApiSpec extends VcrSuite {
-  val vcrBackend = vcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions))
+  val vcrBackend = vcr(ctx => VcrBackend(backend, ctx.settings))
 
   vcrBackend.test("gets a user") { backend => ... }
 }
 ```
+
+Test bodies can return anything munit can run, such as a `Future` or a cats-effect `IO` (with munit-cats-effect). The
+client is saved once it completes.
 
 `withVcr(testName)(create)(use)` (and `withVcrAsync` for code returning a `Future`) is also available for creating a
 client inside any test.
@@ -129,7 +137,7 @@ import org.scalatest.funsuite.AnyFunSuite
 
 class UserApiSpec extends AnyFunSuite with VcrSuite {
   test("gets a user") {
-    withVcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend =>
+    withVcr(ctx => VcrBackend(backend, ctx.settings)) { backend =>
       ...
     }
   }
@@ -153,7 +161,7 @@ import zio.test._
 
 object UserApiSpec extends ZIOSpecDefault with VcrSpec {
   def spec = suite("UserApi")(
-    vcrTest("gets a user")(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend =>
+    vcrTest("gets a user")(ctx => VcrBackend(backend, ctx.settings)) { backend =>
       ZIO.attempt(basicRequest.get(uri"https://postman-echo.com/get").send(backend)).map { response =>
         assertTrue(response.is200)
       }
@@ -175,7 +183,9 @@ override def vcrLayout = VcrLayout.PerSuite
 ```
 
 Every entry is labelled with the test that recorded it, and in either layout a test only sees and replaces its own
-entries (even if two test names map to the same file name).
+entries (even if two test names map to the same file name). So running a subset of tests (e.g. with `testOnly`) or
+running tests in parallel works the same either way. One file per test is easier to navigate and less prone to merge
+conflicts. One file per suite means fewer files.
 
 ### File names
 
@@ -196,8 +206,7 @@ To rename existing recordings after changing the naming (they're matched to test
 
 ```
 sbt "Test/runMain bekindrewind.codec.VcrTool rename src/test/resources/vcr json --naming by-hash --dry-run"
-``` So running a subset of tests (e.g. with `testOnly`) or running tests in parallel works the same either way.
-One file per test is easier to navigate and less prone to merge conflicts. One file per suite means fewer files.
+```
 
 ### Clients created outside of tests (dependency injection)
 
@@ -485,7 +494,7 @@ Requests rejected by `shouldRecord` are sent as usual but not recorded (or fail,
 `RecordOptions.notRecordedThrowsErrors` is set):
 
 ```scala
-VcrMatcher.default.withShouldRecord(_.uri.getHost == "postman-echo.com")
+VcrMatcher.default.recordOnly(_.uri.getHost == "postman-echo.com")
 ```
 
 ### Using multiple matchers
@@ -494,11 +503,11 @@ If you're using the same HTTP client for multiple APIs, you may want a different
 Combine matchers with `append` (or the `:+` alias). Each request uses the first matcher whose `shouldRecord` accepts it:
 
 ```scala
-val ipifyMatcher = VcrMatcher.default.withShouldRecord(_.uri.getHost == "api.ipify.org")
+val ipifyMatcher = VcrMatcher.default.recordOnly(_.uri.getHost == "api.ipify.org")
 
 val postmanEchoMatcher = JsonMatchers
   .methodUriAndJsonBodyIgnoring("timestamp")
-  .withShouldRecord(_.uri.getHost == "postman-echo.com")
+  .recordOnly(_.uri.getHost == "postman-echo.com")
 
 val matcher = ipifyMatcher :+ postmanEchoMatcher
 ```
@@ -518,9 +527,12 @@ val matcher = VcrMatcher.default
 ```
 
 The values of redacted headers and query parameters are also replaced wherever else they appear in the entry: in
-bodies, URIs and other headers, of both the request and the response. That covers servers that echo requests back, or
-error messages that include an API key. Only values of at least 8 characters are replaced elsewhere, since shorter ones
-are unlikely to be secrets. Binary (base64) bodies are left as is.
+bodies, URIs and other headers. Values found in the request (query parameters and request headers) are replaced in
+both the request and the response, which covers servers that echo requests back, or error messages that include an API
+key. Values found only in response headers (such as a session token in `Set-Cookie`) are replaced in the response only,
+since requests must be redacted the same way when they're matched, before there is a response. To keep such a value out
+of later requests, also redact the request header that carries it (such as `Cookie`). Only values of at least 8
+characters are replaced elsewhere, since shorter ones are unlikely to be secrets. Binary (base64) bodies are left as is.
 
 Request redaction is also applied to live requests before they are matched, so a redacted query parameter still
 matches on replay.
@@ -634,6 +646,7 @@ format (e.g. `yaml yaml`) rewrites recordings in the current output format.
   modules now use Play 3 (Pekko). Scala 3 is supported, and Scala 2.12 no longer is.
 - `RecordOptions(overwriteAll = true)` is now `RecordOptions.default.mode(RecordMode.RecordAll)`.
 - `VcrMatcher.identity` is now `VcrMatcher.exact`.
+- `StatefulVcrEntries` is now `VcrEntryGroup`, and which entries were replayed is tracked by the new `VcrRecording`.
 - `VcrStorage.read()` returns `Either[Throwable, Option[VcrEntries]]`, and `Codec` has a new `fileExtension` member.
 - `VcrRequest.httpVersion` is now optional, and `VcrRequest`/`VcrResponse` have a new `bodyEncoding` field.
 - Expiration applies to each test's entries instead of the whole file.

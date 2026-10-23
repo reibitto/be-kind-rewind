@@ -13,8 +13,10 @@ trait VcrClient {
   def matcher: VcrMatcher
 
   /**
-   * Used to specify recording options such as the record mode or expiring VCR entries after some time. Ignored when
-   * `storage` is a [[storage.SharedRecordingStorage]], which has its own record options.
+   * Used to specify recording options such as the record mode or expiring VCR entries after some time. When `storage`
+   * is a [[storage.SharedRecordingStorage]] (such as a test context's storage), the shared recording's options are used
+   * instead, and requests fail if this client was given different ones (other than the default), since they would be
+   * ignored. In the test framework integrations, set them for the suite with `vcrRecordOptions`.
    */
   def recordOptions: RecordOptions
 
@@ -29,22 +31,34 @@ trait VcrClient {
    */
   def recording: VcrRecording =
     storage match {
-      case shared: SharedRecordingStorage => shared.recording
+      case shared: SharedRecordingStorage => checkOptions(shared.recording)
       case _                              => ownRecording
     }
+
+  private def checkOptions(shared: VcrRecording): VcrRecording =
+    if (recordOptions == RecordOptions.default || recordOptions == shared.recordOptions) shared
+    else
+      throw new VcrException(
+        s"This client's record options ($recordOptions) differ from those of the shared recording it uses " +
+          s"(${shared.recordOptions}), such as a test context's, so they would be ignored. Set them for the suite " +
+          "instead (`vcrRecordOptions` in the test framework integrations), or create the client with `ctx.settings`."
+      )
 
   private lazy val ownRecording: VcrRecording = new VcrRecording(storage, recordOptions)
 
   protected[bekindrewind] def loaded: Option[VcrEntries] = recording.loaded
 
-  protected[bekindrewind] def previouslyRecorded: Map[VcrKey, StatefulVcrEntries] = recording.groups(matcher)
+  protected[bekindrewind] def previouslyRecorded: Map[VcrKey, VcrEntryGroup] = recording.groups(matcher)
 
   def addNewEntry(entry: VcrEntry): Unit = recording.addNewEntry(matcher, entry)
 
   def newlyRecorded(): immutable.Seq[VcrEntry] = recording.newlyRecorded()
 
-  /** See [[VcrRecording.findMatch]]. */
-  def findMatch(vcrRequest: VcrRequest): Option[VcrEntry] = recording.findMatch(matcher, vcrRequest)
+  /** See [[VcrRecording.nextMatch]]. */
+  def nextMatch(vcrRequest: VcrRequest): Option[VcrEntry] = recording.nextMatch(matcher, vcrRequest)
+
+  @deprecated("Use `nextMatch` instead. It marks the entry it returns as replayed.", "0.2.0")
+  def findMatch(vcrRequest: VcrRequest): Option[VcrEntry] = nextMatch(vcrRequest)
 
   /**
    * Decides whether the request should be replayed, recorded, sent as is, or rejected. Requests the matcher doesn't
@@ -66,7 +80,7 @@ trait VcrClient {
 
   private def currentRecording: Option[VcrRecording] =
     storage match {
-      case shared: SharedRecordingStorage => shared.currentRecording
+      case shared: SharedRecordingStorage => shared.currentRecording.map(checkOptions)
       case _                              => Some(ownRecording)
     }
 
@@ -88,18 +102,18 @@ object VcrClient {
   /** A client without an HTTP library, for adapting HTTP clients that the library doesn't support. */
   def apply(
     storage: VcrStorage,
-    matcher: VcrMatcher,
-    recordOptions: RecordOptions = RecordOptions.default
+    recordOptions: RecordOptions = RecordOptions.default,
+    matcher: VcrMatcher = VcrMatcher.default
   ): VcrClient = {
-    val (s, m, o) = (storage, matcher, recordOptions)
+    val (s, o, m) = (storage, recordOptions, matcher)
     new VcrClient {
       override val storage: VcrStorage          = s
-      override val matcher: VcrMatcher          = m
       override val recordOptions: RecordOptions = o
+      override val matcher: VcrMatcher          = m
     }
   }
 
-  def apply(settings: VcrSettings): VcrClient = apply(settings.storage, settings.matcher, settings.recordOptions)
+  def apply(settings: VcrSettings): VcrClient = apply(settings.storage, settings.recordOptions, settings.matcher)
 
   def notRecordedError(request: VcrRequest): VcrException =
     new VcrException(

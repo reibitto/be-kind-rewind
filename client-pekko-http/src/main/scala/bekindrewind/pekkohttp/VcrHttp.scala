@@ -31,7 +31,15 @@ object VcrHttp {
     executionContext: ExecutionContext,
     materializer: Materializer
   ): VcrHttp =
-    create(sendRequest, settings.storage, settings.recordOptions, settings.matcher)
+    create(sendRequest, settings, defaultStrictTimeout)
+
+  // A separate overload, since Scala allows default arguments on only one overload of a method.
+  def create(sendRequest: HttpRequest => Future[HttpResponse], settings: VcrSettings, strictTimeout: FiniteDuration)(
+    implicit
+    executionContext: ExecutionContext,
+    materializer: Materializer
+  ): VcrHttp =
+    create(sendRequest, settings.storage, settings.recordOptions, settings.matcher, strictTimeout)
 
   def useClassicActorSystem(
     storage: VcrStorage,
@@ -45,7 +53,14 @@ object VcrHttp {
   }
 
   def useClassicActorSystem(settings: VcrSettings)(implicit system: ClassicActorSystemProvider): VcrHttp =
-    useClassicActorSystem(settings.storage, settings.recordOptions, settings.matcher)
+    useClassicActorSystem(settings, None, defaultStrictTimeout)
+
+  def useClassicActorSystem(
+    settings: VcrSettings,
+    executionContext: Option[ExecutionContext],
+    strictTimeout: FiniteDuration
+  )(implicit system: ClassicActorSystemProvider): VcrHttp =
+    useClassicActorSystem(settings.storage, settings.recordOptions, settings.matcher, executionContext, strictTimeout)
 
   private[pekkohttp] def toVcrRequest(request: HttpRequest, body: ByteString): VcrRequest =
     VcrRequest.fromBytes(

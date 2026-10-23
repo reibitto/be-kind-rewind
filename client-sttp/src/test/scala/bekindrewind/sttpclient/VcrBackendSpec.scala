@@ -5,7 +5,9 @@ import bekindrewind.codec.JsonCodec
 import bekindrewind.storage.{ FileVcrStorage, InMemoryVcrStorage }
 import bekindrewind.testing.TestHttpServer
 import munit._
+import sttp.capabilities.WebSockets
 import sttp.client3._
+import sttp.client3.monad.IdMonad
 import sttp.client3.testing.SttpBackendStub
 import sttp.model.{ Header, StatusCode }
 
@@ -13,8 +15,9 @@ import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{ AtomicInteger, AtomicReference }
 import scala.collection.immutable
+import scala.util.Try
 
 class VcrBackendSpec extends FunSuite {
 
@@ -144,10 +147,30 @@ class VcrBackendSpec extends FunSuite {
     assertEquals(backend.newlyRecorded().map(_.request.body), Vector("stream body ✓", "buffer body", "string body"))
   }
 
+  test("One-shot bodies of unrecordable requests are sent intact") {
+    val received = new AtomicReference[Option[String]](None)
+    val stub     = SttpBackendStub[Identity, WebSockets](IdMonad).whenAnyRequest.thenRespondF { (request: Request[_, _]) =>
+      request.body match {
+        case InputStreamBody(in, _) => received.set(Some(new String(in.readAllBytes(), StandardCharsets.UTF_8)))
+        case _                      => ()
+      }
+      throw new IllegalStateException("No web socket in this test")
+    }
+    val backend  = VcrBackend(stub, new InMemoryVcrStorage)
+
+    val request = basicRequest
+      .post(uri"http://localhost/ws")
+      .body(new ByteArrayInputStream("payload".getBytes(StandardCharsets.UTF_8)))
+      .response(asWebSocketAlwaysUnsafe[Identity])
+    Try(request.send(backend))
+
+    assertEquals(received.get, Some("payload"))
+  }
+
   server.test("Requests rejected by shouldRecord are sent but not recorded") { server =>
     val storage = new InMemoryVcrStorage()
     val backend =
-      VcrBackend(HttpClientSyncBackend(), storage, matcher = VcrMatcher.default.withShouldRecord(_ => false))
+      VcrBackend(HttpClientSyncBackend(), storage, matcher = VcrMatcher.default.recordOnly(_ => false))
     val request = basicRequest.get(uri"${server.uri("/counter")}")
 
     assertEquals(request.send(backend).body, Right("1"))
@@ -160,7 +183,7 @@ class VcrBackendSpec extends FunSuite {
       HttpClientSyncBackend(),
       new InMemoryVcrStorage(),
       RecordOptions.default.notRecordedThrowsErrors(true),
-      VcrMatcher.default.withShouldRecord(_ => false)
+      VcrMatcher.default.recordOnly(_ => false)
     )
 
     val error = intercept[Exception](basicRequest.get(uri"${server.uri("/counter")}").send(backend))

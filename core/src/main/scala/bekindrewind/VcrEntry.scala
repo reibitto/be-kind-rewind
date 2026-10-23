@@ -82,4 +82,4 @@ final case class VcrEntries(entries: Vector[VcrEntry], version: String)
  * @param positions
  *   Where each entry is in the recording.
  */
-final case class StatefulVcrEntries(entries: Vector[VcrEntry], positions: Vector[Int])
+final case class VcrEntryGroup(entries: Vector[VcrEntry], positions: Vector[Int])

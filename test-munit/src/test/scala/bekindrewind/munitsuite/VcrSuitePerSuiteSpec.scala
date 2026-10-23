@@ -1,4 +1,4 @@
-package bekindrewind.munit
+package bekindrewind.munitsuite
 
 import bekindrewind.codec.JsonCodec
 import bekindrewind.javahttp.VcrHttpClient

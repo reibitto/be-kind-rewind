@@ -45,7 +45,7 @@ class VcrSessionSpec extends FunSuite {
 
   tempDir.test("A client created before any test records to whichever test is running") { dir =>
     val support = new Support(dir)
-    val client  = VcrClient(support.vcrSession.storage, VcrMatcher.default)
+    val client  = VcrClient(support.vcrSession.storage, matcher = VcrMatcher.default)
 
     support.vcrSession.start(support.vcrContext("first"))
     client.addNewEntry(entry(request(uri = uri("a"))))
@@ -100,7 +100,7 @@ class VcrSessionSpec extends FunSuite {
 
   tempDir.test("Requests the matcher doesn't record pass through when no test is running") { dir =>
     val support = new Support(dir)
-    val client  = support.vcrSession.client(VcrMatcher.default.withShouldRecord(_.uri.getHost != "passthrough.com"))
+    val client  = support.vcrSession.client(VcrMatcher.default.recordOnly(_.uri.getHost != "passthrough.com"))
 
     assertEquals(client.resolve(request(uri = "https://passthrough.com/a")), VcrAction.PassThrough)
     client.resolve(request(uri = uri("a"))) match {
@@ -113,7 +113,7 @@ class VcrSessionSpec extends FunSuite {
     val support = new Support(dir)
     val client  = support.vcrSession.client(VcrMatcher.default)
 
-    intercept[IllegalStateException](client.findMatch(request()))
+    intercept[IllegalStateException](client.nextMatch(request()))
 
     support.vcrSession.start(support.vcrContext("a"))
     val error = intercept[IllegalStateException](support.vcrSession.start(support.vcrContext("b")))
@@ -124,8 +124,8 @@ class VcrSessionSpec extends FunSuite {
 
   tempDir.test("Clients sharing a test's storage don't overwrite each other's entries") { dir =>
     val ctx    = new Support(dir).vcrContext("two clients")
-    val first  = VcrClient(ctx.storage, VcrMatcher.default)
-    val second = VcrClient(ctx.storage, VcrMatcher.methodUriAndBody)
+    val first  = VcrClient(ctx.storage, matcher = VcrMatcher.default)
+    val second = VcrClient(ctx.storage, matcher = VcrMatcher.methodUriAndBody)
 
     first.addNewEntry(entry(request(uri = uri("a"))))
     second.addNewEntry(entry(request(uri = uri("b"))))
@@ -153,11 +153,11 @@ class VcrSessionSpec extends FunSuite {
     underlying.write(VcrEntries(Vector(entry(request(uri = uri("a"))), entry(request(uri = uri("b")))), "0.2.0"))
     val shared     = SharedRecordingStorage(underlying, RecordOptions.default)
 
-    val a = MockClient(shared, RecordOptions.default, VcrMatcher.default.withShouldRecord(_.uri.getPath == "/a"))
+    val a = MockClient(shared, RecordOptions.default, VcrMatcher.default.recordOnly(_.uri.getPath == "/a"))
     val b = MockClient(shared, RecordOptions.default, VcrMatcher.default)
-    assert(a.findMatch(request(uri = uri("a"))).isDefined)
+    assert(a.nextMatch(request(uri = uri("a"))).isDefined)
     assertEquals(b.unusedEntries().map(_.request.uri.toString), Vector(uri("b")))
-    assert(b.findMatch(request(uri = uri("b"))).isDefined)
+    assert(b.nextMatch(request(uri = uri("b"))).isDefined)
     assertEquals(a.unusedEntries(), Vector.empty)
   }
 
@@ -167,14 +167,15 @@ class VcrSessionSpec extends FunSuite {
     val b       = support.vcrContext("gets-a-user")
     assertEquals(a.path, b.path)
 
-    VcrClient(a.storage, VcrMatcher.default).addNewEntry(entry(request(uri = uri("a"))))
+    VcrClient(a.storage, matcher = VcrMatcher.default).addNewEntry(entry(request(uri = uri("a"))))
     a.recording.save(succeeded = true)
-    VcrClient(b.storage, VcrMatcher.default).addNewEntry(entry(request(uri = uri("b"))))
+    VcrClient(b.storage, matcher = VcrMatcher.default).addNewEntry(entry(request(uri = uri("b"))))
     b.recording.save(succeeded = true)
 
     assertEquals(read(a.path).map(_.testName), Vector(Some("gets a user"), Some("gets-a-user")))
     assertEquals(
-      VcrClient(support.vcrContext("gets a user").storage, VcrMatcher.default).findMatch(request(uri = uri("b"))),
+      VcrClient(support.vcrContext("gets a user").storage, matcher = VcrMatcher.default)
+        .nextMatch(request(uri = uri("b"))),
       None
     )
   }
@@ -186,7 +187,7 @@ class VcrSessionSpec extends FunSuite {
     FileVcrStorage(path, TestCodec).write(VcrEntries(Vector(entry()), "0.1.0"))
 
     assertEquals(
-      VcrClient(support.vcrContext("legacy").storage, VcrMatcher.default).findMatch(request()),
+      VcrClient(support.vcrContext("legacy").storage, matcher = VcrMatcher.default).nextMatch(request()),
       Some(entry())
     )
   }

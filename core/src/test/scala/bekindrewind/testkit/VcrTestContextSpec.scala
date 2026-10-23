@@ -8,6 +8,7 @@ import bekindrewind.testing.TestData._
 import munit._
 
 import java.nio.file.{ Path, Paths }
+import java.time.Duration
 
 class VcrTestContextSpec extends FunSuite {
   private val codec = new Codec {
@@ -40,13 +41,30 @@ class VcrTestContextSpec extends FunSuite {
     assertEquals(a.storage.testName, Some("test a"))
   }
 
+  test("Clients given record options that their test's recording would ignore fail instead") {
+    val support = new Support(VcrLayout.PerTest) {
+      override def vcrRecordOptions: RecordOptions = RecordOptions.default.expiresAfter(Duration.ofDays(1))
+    }
+    val ctx     = support.vcrContext("a test")
+
+    def resolve(options: RecordOptions) = MockClient(ctx.storage, options, VcrMatcher.default).resolve(request())
+
+    assertEquals(resolve(ctx.recordOptions), VcrAction.Record)
+    assertEquals(resolve(RecordOptions.default), VcrAction.Record)
+    resolve(RecordOptions.default.mode(RecordMode.ReplayOnly)) match {
+      case VcrAction.Fail(error: VcrException) =>
+        assert(error.getMessage.contains("vcrRecordOptions"), error.getMessage)
+      case other                               => fail(s"Expected a failure, got $other")
+    }
+  }
+
   test("withTestName labels entries that don't have a test name yet") {
     val underlying = new InMemoryVcrStorage()
     val labeled    = entry().copy(testName = Some("other test"))
 
     underlying.write(VcrEntries(Vector(labeled), "0.2.0"))
     val client = MockClient(underlying.withTestName("my test"), RecordOptions.default, VcrMatcher.exact)
-    client.findMatch(labeled.request)
+    client.nextMatch(labeled.request)
     client.addNewEntry(entry(request(uri = "https://example.com/new")))
     client.save()
 

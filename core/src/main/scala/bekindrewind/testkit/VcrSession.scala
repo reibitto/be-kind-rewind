@@ -1,7 +1,7 @@
 package bekindrewind.testkit
 
 import bekindrewind.storage.{ SharedRecordingStorage, VcrStorage }
-import bekindrewind.{ RecordOptions, VcrClient, VcrEntries, VcrMatcher, VcrRecording }
+import bekindrewind.{ VcrClient, VcrEntries, VcrMatcher, VcrRecording }
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -52,5 +52,5 @@ final class VcrSession(val suiteName: String) {
   }
 
   /** A client for adapting HTTP libraries that aren't supported out of the box. It records to the running test. */
-  def client(matcher: VcrMatcher): VcrClient = VcrClient(storage, matcher, RecordOptions.default)
+  def client(matcher: VcrMatcher): VcrClient = VcrClient(storage, matcher = matcher)
 }

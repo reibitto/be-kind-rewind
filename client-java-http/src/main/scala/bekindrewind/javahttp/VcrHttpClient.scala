@@ -4,6 +4,7 @@ import bekindrewind._
 import bekindrewind.storage.VcrStorage
 
 import java.io.{ ByteArrayOutputStream, Closeable }
+import java.lang.reflect.InvocationTargetException
 import java.net.http.HttpClient.{ Redirect, Version }
 import java.net.http.HttpRequest.BodyPublishers
 import java.net.http.HttpResponse.{ BodyHandler, BodyHandlers, PushPromiseHandler, ResponseInfo }
@@ -100,6 +101,26 @@ class VcrHttpClient(
         case closeable: AutoCloseable => closeable.close()
         case _                        => ()
       }
+
+  // These override JDK 21+ `HttpClient` methods whose defaults do nothing. Reflection, since this targets JDK 11.
+
+  /** Shuts down the underlying client (JDK 21+). Doesn't save the recording, unlike [[close]]. */
+  def shutdown(): Unit = { callUnderlying("shutdown"); () }
+
+  /** Shuts down the underlying client immediately (JDK 21+). Doesn't save the recording, unlike [[close]]. */
+  def shutdownNow(): Unit = { callUnderlying("shutdownNow"); () }
+
+  def awaitTermination(duration: Duration): Boolean =
+    callUnderlying("awaitTermination", classOf[Duration] -> duration).asInstanceOf[Boolean]
+
+  def isTerminated(): Boolean = callUnderlying("isTerminated").asInstanceOf[Boolean]
+
+  private def callUnderlying(name: String, args: (Class[_], AnyRef)*): AnyRef =
+    try classOf[HttpClient].getMethod(name, args.map(_._1): _*).invoke(underlyingClient, args.map(_._2): _*)
+    catch {
+      case _: NoSuchMethodException     => throw new UnsupportedOperationException(s"HttpClient.$name requires JDK 21+")
+      case e: InvocationTargetException => throw e.getCause
+    }
 
   override def cookieHandler(): Optional[CookieHandler] = underlyingClient.cookieHandler()
 

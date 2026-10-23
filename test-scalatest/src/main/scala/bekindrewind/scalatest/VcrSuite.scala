@@ -16,7 +16,7 @@ import scala.util.{ DynamicVariable, Try }
  *   val backend = HttpClientSyncBackend()
  *
  *   test("gets a user") {
- *     withVcr(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend => ... }
+ *     withVcr(ctx => VcrBackend(backend, ctx.settings)) { backend => ... }
  *   }
  * }
  * }}}
@@ -34,10 +34,10 @@ trait VcrSuite extends TestSuite with VcrTestSupport {
    * determines whether unused entries are reported, so put the test's assertions inside it.
    */
   def withVcr[C <: VcrClient, A](create: VcrTestContext => C)(use: C => A): A = {
-    val client = create(vcrContext(VcrSuite.testName(currentTestName.value)))
+    val (client, close) = vcrOpen(VcrSuite.testName(currentTestName.value))(create)
 
-    val result = vcrOnFailure(use(client))(vcrSave(client, succeeded = false))
-    vcrSave(client, succeeded = true)
+    val result = vcrOnFailure(use(client))(close(false))
+    close(true)
     result
   }
 }
@@ -56,9 +56,9 @@ trait AsyncVcrSuite extends AsyncTestSuite with VcrTestSupport {
    * called when the test starts rather than inside a callback, since that's when the test name is known.
    */
   def withVcr[C <: VcrClient, A](create: VcrTestContext => C)(use: C => Future[A]): Future[A] = {
-    val client = create(vcrContext(VcrSuite.testName(currentTestName.value)))
+    val (client, close) = vcrOpen(VcrSuite.testName(currentTestName.value))(create)
     Future.fromTry(Try(use(client))).flatten.transform { result =>
-      Try(vcrSave(client, result.isSuccess)).flatMap(_ => result)
+      Try(close(result.isSuccess)).flatMap(_ => result)
     }
   }
 }

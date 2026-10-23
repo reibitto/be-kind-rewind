@@ -1,4 +1,4 @@
-package bekindrewind.munit
+package bekindrewind.munitsuite
 
 import bekindrewind.RecordOptions
 import bekindrewind.codec.JsonCodec

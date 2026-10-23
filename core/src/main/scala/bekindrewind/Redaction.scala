@@ -35,8 +35,9 @@ object Redaction {
 
   /**
    * What a matcher redacts. Besides the named headers and query parameters themselves, their values are replaced
-   * wherever else they appear in the entry (bodies, URIs and other headers, of both the request and the response), for
-   * example when a server echoes the request back.
+   * wherever else they appear (bodies, URIs and other headers): values from the request throughout the entry, for
+   * example when a server echoes the request back, and values from response headers in the response only, since
+   * requests are redacted the same way when they're matched, before there is a response.
    */
   final case class Rules(headers: Set[String], queryParams: Set[String], values: Set[String]) {
     def isEmpty: Boolean = headers.isEmpty && queryParams.isEmpty && values.isEmpty

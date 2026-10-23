@@ -29,7 +29,8 @@ class VcrBackend[F[_], P](
 
   override def send[T, R >: P with capabilities.Effect[F]](request: Request[T, R]): F[Response[T]] =
     monad.flatten(monad.eval {
-      bufferBody(request).filter(_ => replayable(request.response)) match {
+      // Checked before buffering, since buffering consumes one-shot bodies of requests that are then sent as is.
+      (if (replayable(request.response)) bufferBody(request) else None) match {
         case Some((bufferedRequest, bytes)) => sendBuffered(bufferedRequest, bytes)
         case None                           =>
           val vcrRequest = toVcrRequest(request, Array.emptyByteArray)

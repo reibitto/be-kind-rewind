@@ -105,6 +105,8 @@ class VcrConverterSpec extends ScalaCheckSuite {
 
     assert(VcrTool.run(List("convert", dir.toString, "xml", "json")).isLeft)
     assert(VcrTool.run(List("rename", dir.toString, "yaml", "--naming", "by-hash:999")).isLeft)
+    assert(VcrTool.run(List("rename", dir.toString, "yaml", "--dryrun")).left.exists(_.startsWith("Unknown option")))
+    assert(VcrTool.run(List("rename", dir.toString, "yaml", "--naming")).isLeft)
     assert(VcrTool.run(Nil).left.exists(_.startsWith("Usage")))
   }
 }

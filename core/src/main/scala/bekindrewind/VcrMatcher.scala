@@ -30,14 +30,18 @@ sealed trait VcrMatcher {
   def transform(entry: VcrEntry): VcrEntry
 
   /**
-   * Attaches the specified grouping function to this matcher.
+   * Replaces the grouping function of this matcher.
    */
   def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher
 
   /**
-   * Attaches the specified predicate to determine whether the request should be recorded or not to this matcher.
+   * Only records requests that satisfy `pred`, in addition to any previous `recordOnly` conditions. Other requests are
+   * sent without being recorded, or fail if `RecordOptions.notRecordedThrowsErrors` is set (see [[shouldRecord]]).
    */
-  def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher
+  def recordOnly(pred: VcrRequest => Boolean): VcrMatcher
+
+  @deprecated("Use `recordOnly` instead, which also combines predicates rather than replacing them.", "0.2.0")
+  def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher = recordOnly(pred)
 
   /**
    * Replaces the VCR entry transformer of this matcher.
@@ -75,8 +79,8 @@ sealed trait VcrMatcher {
   def ignoreQueryParamOrder: VcrMatcher =
     mapUriForMatching(RequestKeys.sortedQueryParams)
 
-  /** Adds redaction rules. See [[Redaction.Rules]]. */
-  def withRedaction(rules: Redaction.Rules): VcrMatcher
+  /** Adds redaction rules to the existing ones. See [[Redaction.Rules]]. */
+  def redact(rules: Redaction.Rules): VcrMatcher
 
   /**
    * The request as it would be recorded (redacted and filtered), for showing it in messages without leaking secrets.
@@ -85,18 +89,19 @@ sealed trait VcrMatcher {
 
   /**
    * Replaces the values of the specified request and response headers (case-insensitive) with a placeholder, as well as
-   * those values wherever else they appear in the entry (such as a response body echoing the request).
+   * those values wherever else they appear: request header values throughout the entry (such as a response body echoing
+   * the request), and response header values in the response only. See [[Redaction.Rules]].
    */
   def redactHeaders(names: String*): VcrMatcher =
-    withRedaction(Redaction.Rules.empty.copy(headers = names.map(_.toLowerCase).toSet))
+    redact(Redaction.Rules.empty.copy(headers = names.map(_.toLowerCase).toSet))
 
   /** Replaces the values of the specified query parameters with a placeholder, as well as wherever else they appear. */
   def redactQueryParams(names: String*): VcrMatcher =
-    withRedaction(Redaction.Rules.empty.copy(queryParams = names.toSet))
+    redact(Redaction.Rules.empty.copy(queryParams = names.toSet))
 
   /** Replaces these values (such as API keys known to the test) wherever they appear in the entry. */
   def redactValues(values: String*): VcrMatcher =
-    withRedaction(Redaction.Rules.empty.copy(values = values.toSet))
+    redact(Redaction.Rules.empty.copy(values = values.toSet))
 }
 
 object VcrMatcher {
@@ -152,7 +157,7 @@ object VcrMatcher {
     override def matcherFor(request: VcrRequest): Option[VcrMatcher.One] =
       if (shouldRecordPredicate(request)) Some(this) else None
 
-    override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher.One =
+    override def recordOnly(pred: VcrRequest => Boolean): VcrMatcher.One =
       copy(shouldRecordPredicate = r => shouldRecordPredicate(r) && pred(r))
 
     override def append(other: VcrMatcher): VcrMatcher = other match {
@@ -175,7 +180,7 @@ object VcrMatcher {
     override def mapRequestForMatching(f: VcrRequest => VcrRequest): VcrMatcher.One =
       copy(matchingFilter = matchingFilter.andThen(f))
 
-    override def withRedaction(rules: Redaction.Rules): VcrMatcher.One = copy(redaction = redaction ++ rules)
+    override def redact(rules: Redaction.Rules): VcrMatcher.One = copy(redaction = redaction ++ rules)
 
     override def redacted(request: VcrRequest): VcrRequest = requestFilter(redaction.request(request))
 
@@ -205,7 +210,7 @@ object VcrMatcher {
     override def transform(entry: VcrEntry): VcrEntry =
       matcherFor(entry.request).map(_.transform(entry)).getOrElse(entry)
 
-    override def withShouldRecord(pred: VcrRequest => Boolean): VcrMatcher = mapEach(_.withShouldRecord(pred))
+    override def recordOnly(pred: VcrRequest => Boolean): VcrMatcher = mapEach(_.recordOnly(pred))
 
     override def withTransformer(transformer: VcrEntry => VcrEntry): VcrMatcher =
       mapEach(_.withTransformer(transformer))
@@ -220,7 +225,7 @@ object VcrMatcher {
 
     override def withGrouper(grouper: VcrRequest => VcrKey): VcrMatcher = mapEach(_.withGrouper(grouper))
 
-    override def withRedaction(rules: Redaction.Rules): VcrMatcher = mapEach(_.withRedaction(rules))
+    override def redact(rules: Redaction.Rules): VcrMatcher = mapEach(_.redact(rules))
 
     // Requests no matcher accepts aren't recorded, but every matcher's redaction applies to them in error messages.
     override def redacted(request: VcrRequest): VcrRequest =

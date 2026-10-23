@@ -25,16 +25,16 @@ class VcrMatcherSpec extends ScalaCheckSuite {
     }
   }
 
-  test("withShouldRecord") {
-    val matcher = VcrMatcher.exact.withShouldRecord(_.method == "GET")
+  test("recordOnly") {
+    val matcher = VcrMatcher.exact.recordOnly(_.method == "GET")
 
     assert(matcher.shouldRecord(request(method = "GET")))
     assert(!matcher.shouldRecord(request(method = "POST")))
     assertEquals(matcher.group(request(method = "POST")), VcrKey.Ungrouped)
   }
 
-  test("withShouldRecord combines predicates") {
-    val matcher = VcrMatcher.default.withShouldRecord(_.method == "GET").withShouldRecord(_.uri.getHost == "a.com")
+  test("recordOnly combines predicates") {
+    val matcher = VcrMatcher.default.recordOnly(_.method == "GET").recordOnly(_.uri.getHost == "a.com")
 
     assert(matcher.shouldRecord(request(uri = "https://a.com")))
     assert(!matcher.shouldRecord(request(uri = "https://b.com")))
@@ -44,8 +44,8 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   test("append falls through to the next matcher") {
     val uriA     = new URI("https://a.com")
     val uriB     = new URI("https://b.com")
-    val matcher  = VcrMatcher.default.withShouldRecord(_.uri == uriA)
-    val matcher2 = VcrMatcher.default.withShouldRecord(_.uri == uriB)
+    val matcher  = VcrMatcher.default.recordOnly(_.uri == uriA)
+    val matcher2 = VcrMatcher.default.recordOnly(_.uri == uriB)
 
     val combinedMatcher = matcher :+ matcher2
 
@@ -80,16 +80,16 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   }
 
   test("Combined matchers use the grouping of the matcher that accepted the request") {
-    val byBody  = VcrMatcher.groupBy(_.body).withShouldRecord(_.method == "POST")
+    val byBody  = VcrMatcher.groupBy(_.body).recordOnly(_.method == "POST")
     val matcher = byBody :+ VcrMatcher.default
 
     assertEquals(matcher.group(request(method = "POST", body = "x")), VcrKey("x"))
     assertEquals(matcher.group(request(body = "x")), VcrKey(("GET", new URI("https://example.com/foo.json"))))
   }
 
-  test("withShouldRecord on combined matchers keeps each matcher's own predicate") {
-    val matcher = (VcrMatcher.default.withShouldRecord(_.uri.getHost == "a.com") :+
-      VcrMatcher.default.withShouldRecord(_.uri.getHost == "b.com")).withShouldRecord(_.method == "GET")
+  test("recordOnly on combined matchers keeps each matcher's own predicate") {
+    val matcher = (VcrMatcher.default.recordOnly(_.uri.getHost == "a.com") :+
+      VcrMatcher.default.recordOnly(_.uri.getHost == "b.com")).recordOnly(_.method == "GET")
 
     assert(matcher.shouldRecord(request(uri = "https://a.com")))
     assert(matcher.shouldRecord(request(uri = "https://b.com")))
@@ -98,7 +98,7 @@ class VcrMatcherSpec extends ScalaCheckSuite {
   }
 
   test("Combined matchers apply the transformer of the matcher that accepted the entry") {
-    val matcher = VcrMatcher.default.withShouldRecord(_.uri.getHost == "a.com").withTransformer { e =>
+    val matcher = VcrMatcher.default.recordOnly(_.uri.getHost == "a.com").withTransformer { e =>
       e.copy(response = e.response.copy(body = "redacted-a"))
     } :+ VcrMatcher.default.withTransformer(e => e.copy(response = e.response.copy(body = "redacted-other")))
 

@@ -38,6 +38,18 @@ class FileVcrStorageSpec extends FunSuite {
     assertEquals(FileVcrStorage(dir.resolve("missing.json"), new StubCodec).read(), Right(None))
   }
 
+  tempDir.test("Recordings get the same permissions as other new files") { dir =>
+    assume(dir.getFileSystem.supportedFileAttributeViews().contains("posix"), "POSIX permissions only")
+
+    val path = dir.resolve("recording.json")
+    FileVcrStorage(path, new StubCodec).write(VcrEntries(Vector.empty, BuildInfo.version))
+
+    assertEquals(
+      Files.getPosixFilePermissions(path),
+      Files.getPosixFilePermissions(Files.createFile(dir.resolve("other.json")))
+    )
+  }
+
   tempDir.test("Write creates parent directories and can be read back") { dir =>
     val path    = dir.resolve("nested/dir/example.json")
     val storage = FileVcrStorage(path, new StubCodec)

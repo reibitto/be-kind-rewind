@@ -1,4 +1,4 @@
-package bekindrewind.munit
+package bekindrewind.munitsuite
 
 import scala.concurrent.Future
 import scala.util.Try

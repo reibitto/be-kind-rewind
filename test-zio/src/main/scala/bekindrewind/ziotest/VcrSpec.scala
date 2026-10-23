@@ -7,7 +7,7 @@ import zio.internal.stacktracer.SourceLocation
 import zio.test._
 import zio.{ Chunk, Exit, FiberRef, Trace, Unsafe, ZIO }
 
-import scala.collection.mutable
+import scala.collection.concurrent.TrieMap
 
 /**
  * Creates VCR clients for tests, stored according to [[vcrLayout]] (one file per test by default).
@@ -21,7 +21,7 @@ import scala.collection.mutable
  *   val backend = HttpClientSyncBackend()
  *
  *   def spec = suite("UserApi")(
- *     vcrTest("gets a user")(ctx => VcrBackend(backend, ctx.storage, ctx.recordOptions)) { backend =>
+ *     vcrTest("gets a user")(ctx => VcrBackend(backend, ctx.settings)) { backend =>
  *       ZIO.attempt(...).map(user => assertTrue(user.name == "foo"))
  *     }
  *   )
@@ -63,9 +63,10 @@ trait VcrSpec extends ZIOSpecAbstract with VcrTestSupport {
   private def withVcrChecked[R, E, C <: VcrClient, A](testName: String)(create: VcrTestContext => C)(
     use: C => ZIO[R, E, A]
   )(succeeded: A => Boolean)(implicit trace: Trace): ZIO[R, E, A] =
-    ZIO.acquireReleaseExitWith(ZIO.attempt(create(vcrContext(testName))).orDie) { (client: C, exit: Exit[E, A]) =>
-      ZIO.attempt(vcrSave(client, exit.exists(succeeded))).orDie
-    }(use)
+    ZIO.acquireReleaseExitWith(ZIO.attempt(vcrOpen(testName)(create)).orDie) {
+      (opened: (C, Boolean => Unit), exit: Exit[E, A]) =>
+        ZIO.attempt(opened._2(exit.exists(succeeded))).orDie
+    }(opened => use(opened._1))
 }
 
 object VcrSpec {
@@ -76,8 +77,8 @@ object VcrSpec {
   private[ziotest] def mapTests[R, E](spec: Spec[R, E])(
     f: (String, ZIO[R, TestFailure[E], TestSuccess]) => ZIO[R, TestFailure[E], TestSuccess]
   )(implicit trace: Trace): Spec[R, E] = {
-    // Scoped specs are only built when they run, so the counts can't be threaded through as values.
-    val seen = mutable.Map.empty[String, Int]
+    // Scoped specs are only built when they run, possibly in parallel, so counts are shared and updated atomically.
+    val seen = TrieMap.empty[String, Int]
 
     def loop(spec: Spec[R, E], labels: Chunk[String]): Spec[R, E] =
       spec.caseValue match {

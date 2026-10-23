@@ -36,7 +36,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
     }
   }
 
-  private val groupsByMatcher = TrieMap.empty[VcrMatcher, Map[VcrKey, StatefulVcrEntries]]
+  private val groupsByMatcher = TrieMap.empty[VcrMatcher, Map[VcrKey, VcrEntryGroup]]
 
   private val newlyRecordedRef = new AtomicReference(Vector.empty[VcrEntry])
 
@@ -47,12 +47,12 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
   private val lastSaved = new AtomicReference[Option[VcrEntries]](None)
 
   /** Loaded entries grouped by the matcher, along with how far each group has been replayed. */
-  def groups(matcher: VcrMatcher): Map[VcrKey, StatefulVcrEntries] =
+  def groups(matcher: VcrMatcher): Map[VcrKey, VcrEntryGroup] =
     groupsByMatcher.getOrElseUpdate(
       matcher,
-      loaded.fold(Map.empty[VcrKey, StatefulVcrEntries]) { entries =>
+      loaded.fold(Map.empty[VcrKey, VcrEntryGroup]) { entries =>
         entries.entries.zipWithIndex.groupBy { case (entry, _) => matcher.group(entry.request) }.map {
-          case (key, group) => key -> StatefulVcrEntries(group.map(_._1), group.map(_._2))
+          case (key, group) => key -> VcrEntryGroup(group.map(_._1), group.map(_._2))
         }
       }
     )
@@ -66,10 +66,11 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
   def newlyRecorded(): immutable.Seq[VcrEntry] = newlyRecordedRef.get()
 
   /**
-   * Finds the recorded entry to replay for the given request. Identical requests are replayed in the order they were
-   * recorded. Returns `None` once all recorded entries for that request have been replayed.
+   * Returns the next recorded entry to replay for the given request and marks it as replayed. Identical requests are
+   * replayed in the order they were recorded. Returns `None` once all recorded entries for that request have been
+   * replayed.
    */
-  def findMatch(matcher: VcrMatcher, request: VcrRequest): Option[VcrEntry] =
+  def nextMatch(matcher: VcrMatcher, request: VcrRequest): Option[VcrEntry] =
     matcher.group(request) match {
       case VcrKey.Ungrouped => None
       case key              =>
@@ -78,7 +79,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
 
   /** Marks the group's first entry that hasn't been replayed yet (by any matcher) as replayed, and returns it. */
   @tailrec
-  private def claimNext(group: StatefulVcrEntries): Option[VcrEntry] = {
+  private def claimNext(group: VcrEntryGroup): Option[VcrEntry] = {
     val current = replayed.get
     group.positions.zip(group.entries).find { case (position, _) => !current.contains(position) } match {
       case None                                                                           => None
@@ -94,7 +95,7 @@ final class VcrRecording(val storage: VcrStorage, val recordOptions: RecordOptio
       else VcrAction.PassThrough
     } else if (recordOptions.mode == RecordMode.RecordAll) VcrAction.Record
     else
-      findMatch(matcher, request) match {
+      nextMatch(matcher, request) match {
         case Some(entry) => VcrAction.Replay(entry)
         case None        =>
           recordOptions.mode match {

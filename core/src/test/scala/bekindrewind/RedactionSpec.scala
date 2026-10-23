@@ -92,7 +92,7 @@ class RedactionSpec extends FunSuite {
   }
 
   test("Redaction survives withTransformer, and composes on combined matchers") {
-    val matcher = (VcrMatcher.default.withShouldRecord(_.uri.getHost == "other.com") :+ VcrMatcher.default)
+    val matcher = (VcrMatcher.default.recordOnly(_.uri.getHost == "other.com") :+ VcrMatcher.default)
       .redactHeaders("x-api-key")
       .withTransformer(identity)
 

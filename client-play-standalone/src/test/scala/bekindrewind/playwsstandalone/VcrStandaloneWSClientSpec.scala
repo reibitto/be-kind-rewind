@@ -131,7 +131,7 @@ class VcrStandaloneWSClientSpec extends FunSuite {
     val vcr = client(
       new InMemoryVcrStorage(),
       RecordOptions.default.notRecordedThrowsErrors(true),
-      VcrMatcher.default.withShouldRecord(_ => false)
+      VcrMatcher.default.recordOnly(_ => false)
     )
 
     vcr.url(server.url("/counter")).get().failed.map { error =>

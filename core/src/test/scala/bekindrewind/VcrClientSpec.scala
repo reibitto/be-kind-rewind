@@ -72,45 +72,45 @@ class VcrClientSpec extends FunSuite {
     }
   }
 
-  test("findMatch replays identical requests in recorded order and then stops matching") {
+  test("nextMatch replays identical requests in recorded order and then stops matching") {
     val first  = entry(response = response("first"))
     val second = entry(response = response("second"))
     val other  = entry(request(uri = "https://example.com/other"), response("other"))
     val client = MockClient(storageWith(first, other, second), RecordOptions.default, VcrMatcher.default)
 
-    assertEquals(client.findMatch(request()), Some(first))
-    assertEquals(client.findMatch(request(uri = "https://example.com/other")), Some(other))
-    assertEquals(client.findMatch(request()), Some(second))
-    assertEquals(client.findMatch(request()), None)
-    assertEquals(client.findMatch(request(uri = "https://example.com/unknown")), None)
+    assertEquals(client.nextMatch(request()), Some(first))
+    assertEquals(client.nextMatch(request(uri = "https://example.com/other")), Some(other))
+    assertEquals(client.nextMatch(request()), Some(second))
+    assertEquals(client.nextMatch(request()), None)
+    assertEquals(client.nextMatch(request(uri = "https://example.com/unknown")), None)
   }
 
-  test("findMatch ignores the body with the default matcher but not with the exact matcher") {
+  test("nextMatch ignores the body with the default matcher but not with the exact matcher") {
     val recorded = entry(request(method = "POST", body = "a"))
 
     val default = MockClient(storageWith(recorded), RecordOptions.default, VcrMatcher.default)
-    assertEquals(default.findMatch(request(method = "POST", body = "b")), Some(recorded))
+    assertEquals(default.nextMatch(request(method = "POST", body = "b")), Some(recorded))
 
     val exact = MockClient(storageWith(recorded), RecordOptions.default, VcrMatcher.exact)
-    assertEquals(exact.findMatch(request(method = "POST", body = "b")), None)
-    assertEquals(exact.findMatch(request(method = "POST", body = "a")), Some(recorded))
+    assertEquals(exact.nextMatch(request(method = "POST", body = "b")), None)
+    assertEquals(exact.nextMatch(request(method = "POST", body = "a")), Some(recorded))
   }
 
-  test("findMatch never matches requests rejected by shouldRecord") {
+  test("nextMatch never matches requests rejected by shouldRecord") {
     val client = MockClient(
       storageWith(entry()),
       RecordOptions.default,
-      VcrMatcher.default.withShouldRecord(_.method == "POST")
+      VcrMatcher.default.recordOnly(_.method == "POST")
     )
 
-    assertEquals(client.findMatch(request()), None)
+    assertEquals(client.nextMatch(request()), None)
   }
 
   test("RecordAll ignores and replaces previously recorded entries") {
     val storage = storageWith(entry())
     val client  = MockClient(storage, RecordOptions.default.mode(RecordMode.RecordAll), VcrMatcher.default)
 
-    assertEquals(client.findMatch(request()), None)
+    assertEquals(client.nextMatch(request()), None)
 
     val newEntry = entry(response = response("new"))
     client.addNewEntry(newEntry)
@@ -136,7 +136,7 @@ class VcrClientSpec extends FunSuite {
     val storage = new CountingStorage(storageWith(entry()))
     val client  = MockClient(storage, RecordOptions.default, VcrMatcher.default)
 
-    client.findMatch(request())
+    client.nextMatch(request())
     client.save()
 
     assertEquals(storage.writes.get(), 0)
@@ -160,7 +160,7 @@ class VcrClientSpec extends FunSuite {
     val options = RecordOptions.default.expiresAfter(Duration.ofDays(90))
 
     val client = MockClient(storageWith(fresh), options, VcrMatcher.default)
-    assertEquals(client.findMatch(request()), Some(fresh))
+    assertEquals(client.nextMatch(request()), Some(fresh))
   }
 
   test("All entries are re-recorded together once the oldest one expires") {
@@ -170,7 +170,7 @@ class VcrClientSpec extends FunSuite {
     val options = RecordOptions.default.expiresAfter(Duration.ofDays(90))
 
     val client = MockClient(storage, options, VcrMatcher.default)
-    assertEquals(client.findMatch(request(uri = "https://example.com/fresh")), None)
+    assertEquals(client.nextMatch(request(uri = "https://example.com/fresh")), None)
     assertEquals(client.resolve(request()), VcrAction.Record)
 
     val rerecorded = entry()
@@ -183,7 +183,7 @@ class VcrClientSpec extends FunSuite {
   test("Old entries don't expire without expiresAfter") {
     val old = recordedDaysAgo(10000)
     assertEquals(
-      MockClient(storageWith(old), RecordOptions.default, VcrMatcher.default).findMatch(request()),
+      MockClient(storageWith(old), RecordOptions.default, VcrMatcher.default).nextMatch(request()),
       Some(old)
     )
   }
@@ -197,7 +197,7 @@ class VcrClientSpec extends FunSuite {
 
     val client = MockClient(failing, RecordOptions.default, VcrMatcher.default)
 
-    val error = intercept[IllegalStateException](client.findMatch(request()))
+    val error = intercept[IllegalStateException](client.nextMatch(request()))
     assertEquals(error.getCause.getMessage, "corrupt file")
     assert(isFail(client.resolve(request())))
     intercept[IllegalStateException](client.save())
@@ -211,7 +211,7 @@ class VcrClientSpec extends FunSuite {
     }
 
     val client = MockClient(failing, RecordOptions.default.mode(RecordMode.RecordAll), VcrMatcher.default)
-    assertEquals(client.findMatch(request()), None)
+    assertEquals(client.nextMatch(request()), None)
     client.save()
   }
 
@@ -257,7 +257,7 @@ class VcrClientSpec extends FunSuite {
   }
 
   test("Requests rejected by shouldRecord pass through, or fail with notRecordedThrowsErrors") {
-    val matcher = VcrMatcher.default.withShouldRecord(_ => false)
+    val matcher = VcrMatcher.default.recordOnly(_ => false)
     val storage = storageWith(entry())
 
     assertEquals(MockClient(storage, RecordOptions.default, matcher).resolve(request()), VcrAction.PassThrough)
@@ -283,7 +283,7 @@ class VcrClientSpec extends FunSuite {
     assert(!saved.toString.contains("secret"))
 
     val replayer = MockClient(storage, RecordOptions.default, matcher)
-    assertEquals(replayer.findMatch(live), Some(saved))
+    assertEquals(replayer.nextMatch(live), Some(saved))
   }
 
   test("Once records for a test whose scoped storage only has other tests' entries") {
@@ -332,8 +332,8 @@ class VcrClientSpec extends FunSuite {
   }
 
   test("Errors for requests no combined matcher accepts are redacted by every matcher") {
-    val matcher = VcrMatcher.default.withShouldRecord(_ => false).redactQueryParams("api_key") :+
-      VcrMatcher.default.withShouldRecord(_ => false).redactHeaders("Authorization")
+    val matcher = VcrMatcher.default.recordOnly(_ => false).redactQueryParams("api_key") :+
+      VcrMatcher.default.recordOnly(_ => false).redactHeaders("Authorization")
     val live    = request(uri = "https://example.com/data?api_key=supersecret123")
       .copy(headers = Map("Authorization" -> Seq("Bearer supersecret456")))
 

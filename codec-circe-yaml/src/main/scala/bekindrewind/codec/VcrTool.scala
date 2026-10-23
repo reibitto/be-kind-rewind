@@ -45,18 +45,29 @@ object VcrTool {
       case "rename" :: directory :: format :: flags =>
         for {
           codec   <- codec(format)
-          naming  <- flags
-                       .sliding(2)
-                       .collectFirst { case "--naming" :: name :: Nil => name }
-                       .fold[Either[String, VcrFileNaming]](
-                         Right(VcrFileNaming.ByTestName())
-                       )(naming)
-          dryRun   = flags.contains("--dry-run")
-          renamed <- VcrFileNaming.renameRecordings(Paths.get(directory), codec, naming, dryRun).left.map(_.getMessage)
-        } yield s"${if (dryRun) "Would rename" else "Renamed"} ${renamed.size} recordings" +
+          options <- renameOptions(flags, RenameOptions())
+          naming  <- options.naming.fold[Either[String, VcrFileNaming]](Right(VcrFileNaming.ByTestName()))(naming)
+          renamed <- VcrFileNaming
+                       .renameRecordings(Paths.get(directory), codec, naming, options.dryRun)
+                       .left
+                       .map(_.getMessage)
+        } yield s"${if (options.dryRun) "Would rename" else "Renamed"} ${renamed.size} recordings" +
           renamed.map { case (s, t) => s"\n  $s -> ${t.getFileName}" }.mkString
 
       case _ => Left(usage)
+    }
+
+  private final case class RenameOptions(naming: Option[String] = None, dryRun: Boolean = false)
+
+  // Unknown flags are rejected, so that a typo in `--dry-run` doesn't rename anything.
+  @scala.annotation.tailrec
+  private def renameOptions(flags: List[String], options: RenameOptions): Either[String, RenameOptions] =
+    flags match {
+      case Nil                         => Right(options)
+      case "--dry-run" :: rest         => renameOptions(rest, options.copy(dryRun = true))
+      case "--naming" :: value :: rest => renameOptions(rest, options.copy(naming = Some(value)))
+      case "--naming" :: Nil           => Left(s"--naming needs a value.\n$usage")
+      case other :: _                  => Left(s"Unknown option `$other`.\n$usage")
     }
 
   private def codec(name: String): Either[String, Codec] =

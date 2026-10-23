@@ -47,6 +47,17 @@ class VcrHttpClientSpec extends FunSuite {
     assertEquals(server.hits, 1)
   }
 
+  test("shutdown and awaitTermination reach the underlying client") {
+    assume(Runtime.version().feature() >= 21, "HttpClient.shutdown requires JDK 21+")
+
+    val vcr = client(new InMemoryVcrStorage())
+    assert(!vcr.isTerminated())
+    vcr.shutdown()
+
+    assert(vcr.awaitTermination(java.time.Duration.ofSeconds(10)))
+    assert(vcr.isTerminated())
+  }
+
   server.test("Works with sendAsync and streaming body handlers") { server =>
     val storage  = new InMemoryVcrStorage()
     val recorder = client(storage)
@@ -134,7 +145,7 @@ class VcrHttpClientSpec extends FunSuite {
     val vcr = VcrHttpClient(
       HttpClient.newHttpClient(),
       new InMemoryVcrStorage(),
-      matcher = VcrMatcher.default.withShouldRecord(_ => false)
+      matcher = VcrMatcher.default.recordOnly(_ => false)
     )
 
     assertEquals(vcr.send(get(server, "/counter"), BodyHandlers.ofString()).body(), "1")

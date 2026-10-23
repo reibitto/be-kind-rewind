@@ -5,7 +5,9 @@ import bekindrewind.storage.{ FileVcrStorage, SharedRecordingStorage }
 import bekindrewind.{ RecordMode, RecordOptions, VcrClient }
 
 import java.nio.file.{ Files, Path, Paths }
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.concurrent.TrieMap
+import scala.collection.mutable
 import scala.util.Try
 
 /** Settings shared by the test framework integrations. Override the members to customize them. */
@@ -46,12 +48,62 @@ trait VcrTestSupport {
   /** Tracks the running test for clients created outside of tests. See [[VcrSession]]. */
   lazy val vcrSession: VcrSession = new VcrSession(vcrSuiteName)
 
+  // Contexts of tests with clients opened by `vcrOpen` that aren't closed yet. Guarded by itself.
+  private val openVcrContexts = mutable.Map.empty[String, VcrTestSupport.OpenContext]
+
   /**
-   * The context for the named test. While that test is the running [[VcrSession]] test, its context is returned, so
-   * that clients created for the test share the session's recording.
+   * The context for the named test. While the test has clients open (see [[vcrOpen]]) or is the running [[VcrSession]]
+   * test, that context is returned, so that clients created for the test share its recording.
    */
   def vcrContext(testName: String): VcrTestContext =
-    vcrSession.current.filter(_.testName == testName).getOrElse(newVcrContext(testName))
+    vcrSession.current
+      .filter(_.testName == testName)
+      .orElse(openVcrContexts.synchronized(openVcrContexts.get(testName)).map(_.context))
+      .getOrElse(newVcrContext(testName))
+
+  /**
+   * Creates a client for the named test, returning it with a function that closes it (given whether the test
+   * succeeded). Clients of the same test that are open at the same time, such as nested `withVcr` calls, share one
+   * recording, which is saved when the last of them is closed. Recordings of the running `VcrSession` test are left for
+   * the session to save.
+   */
+  protected def vcrOpen[C <: VcrClient](testName: String)(create: VcrTestContext => C): (C, Boolean => Unit) = {
+    val session                             = vcrSession.current.filter(_.testName == testName)
+    val context                             = session.getOrElse(retainVcrContext(testName))
+    val release: Boolean => Option[Boolean] =
+      if (session.isDefined) _ => None else releaseVcrContext(context, _)
+    val client                              = vcrOnFailure(create(context))(release(false))
+    val closed                              = new AtomicBoolean(false)
+    val close: Boolean => Unit              = succeeded =>
+      if (closed.compareAndSet(false, true)) {
+        val testSucceeded = release(succeeded)
+        // Clients created with storage other than the context's have a recording of their own.
+        try testSucceeded.foreach(context.recording.save)
+        finally if (!(client.storage eq context.storage)) client.save(succeeded)
+      }
+    (client, close)
+  }
+
+  private def retainVcrContext(testName: String): VcrTestContext =
+    openVcrContexts.synchronized {
+      val open = openVcrContexts.getOrElseUpdate(testName, new VcrTestSupport.OpenContext(newVcrContext(testName)))
+      open.clients += 1
+      open.context
+    }
+
+  // Returns whether every client of the test succeeded, if this was the last one open.
+  private def releaseVcrContext(context: VcrTestContext, succeeded: Boolean): Option[Boolean] =
+    openVcrContexts.synchronized {
+      openVcrContexts.get(context.testName).filter(_.context eq context).flatMap { open =>
+        open.clients -= 1
+        open.failed = open.failed || !succeeded
+        if (open.clients > 0) None
+        else {
+          openVcrContexts -= context.testName
+          Some(!open.failed)
+        }
+      }
+    }
 
   /**
    * Runs `body`. If it throws, runs `onFailure` (such as saving the recording as failed) and rethrows, keeping any
@@ -65,12 +117,6 @@ trait VcrTestSupport {
       },
       identity
     )
-
-  /**
-   * Saves a client created for a test, unless it records to the running `VcrSession` test, which saves when it ends.
-   */
-  protected def vcrSave(client: VcrClient, succeeded: Boolean): Unit =
-    if (!vcrSession.current.exists(_.recording eq client.recording)) client.save(succeeded)
 
   private def newVcrContext(testName: String): VcrTestContext = {
     val naming    = vcrFileNaming
@@ -95,6 +141,11 @@ trait VcrTestSupport {
 }
 
 object VcrTestSupport {
+  private final class OpenContext(val context: VcrTestContext) {
+    var clients: Int    = 0
+    var failed: Boolean = false
+  }
+
   // Tests sharing a file must share the storage instance, since access to it is synchronized on that instance.
   private val storages = TrieMap.empty[Path, FileVcrStorage]
 

@@ -23,8 +23,8 @@ class UnusedEntriesSpec extends FunSuite {
 
   // Replays `a` once and never requests `b`. `c` is rejected by the matcher.
   private def run(storage: VcrStorage, options: RecordOptions): MockClient = {
-    val client = MockClient(storage, options, VcrMatcher.default.withShouldRecord(_.method == "GET"))
-    assertEquals(client.findMatch(request(uri = "https://example.com/a")), Some(a1))
+    val client = MockClient(storage, options, VcrMatcher.default.recordOnly(_.method == "GET"))
+    assertEquals(client.nextMatch(request(uri = "https://example.com/a")), Some(a1))
     client
   }
 
@@ -89,7 +89,7 @@ class UnusedEntriesSpec extends FunSuite {
 
   test("Nothing is unused when every entry was replayed") {
     val client = MockClient(storageWith(a1), options(UnusedEntries.Fail), VcrMatcher.default)
-    client.findMatch(request(uri = "https://example.com/a"))
+    client.nextMatch(request(uri = "https://example.com/a"))
     client.save()
   }
 }

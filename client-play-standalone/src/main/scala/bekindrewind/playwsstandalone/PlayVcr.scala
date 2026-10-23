@@ -6,7 +6,7 @@ import org.apache.pekko.util.ByteString
 import play.api.libs.ws._
 
 import java.net.HttpCookie
-import java.nio.charset.{ Charset, StandardCharsets }
+import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
 import scala.collection.immutable.TreeMap
 import scala.concurrent.{ ExecutionContext, Future }
@@ -93,15 +93,8 @@ object PlayVcr {
     )
 
   /** Decodes the body with the charset from the Content-Type header, defaulting to UTF-8. */
-  def bodyAsString(headers: Map[String, Seq[String]], body: ByteString): String = {
-    val charset = for {
-      contentType <- caseInsensitive(headers).get("Content-Type").flatMap(_.headOption)
-      param       <- contentType.split(';').map(_.trim).find(_.toLowerCase.startsWith("charset="))
-      charset     <- Try(Charset.forName(param.drop("charset=".length).replace("\"", ""))).toOption
-    } yield charset
-
-    body.decodeString(charset.getOrElse(StandardCharsets.UTF_8))
-  }
+  def bodyAsString(headers: Map[String, Seq[String]], body: ByteString): String =
+    body.decodeString(BodyEncoding.charsetOf(headers).getOrElse(StandardCharsets.UTF_8))
 
   /** Records a response, keeping the exact body bytes. */
   def toVcrResponse(res: StandaloneWSResponse): VcrResponse =

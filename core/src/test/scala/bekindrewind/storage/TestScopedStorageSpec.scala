@@ -52,8 +52,8 @@ class TestScopedStorageSpec extends FunSuite {
     val storage = shared()
     val client  = MockClient(storage.scopedToTest("b"), RecordOptions.default, VcrMatcher.default)
 
-    assertEquals(client.findMatch(request(uri = "https://example.com/a1")), None)
-    assertEquals(client.findMatch(request(uri = "https://example.com/b1")), Some(b1))
+    assertEquals(client.nextMatch(request(uri = "https://example.com/a1")), None)
+    assertEquals(client.nextMatch(request(uri = "https://example.com/b1")), Some(b1))
   }
 
   test("Tests saving to the same storage concurrently don't lose each other's entries") {

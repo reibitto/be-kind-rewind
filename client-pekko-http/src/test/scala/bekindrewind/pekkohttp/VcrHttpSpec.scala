@@ -10,6 +10,7 @@ import org.apache.pekko.http.scaladsl.model.headers.RawHeader
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.ByteString
 
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration._
 import scala.concurrent.{ Await, ExecutionContext, Future }
@@ -69,6 +70,23 @@ class VcrHttpSpec extends FunSuite {
       assertEquals(res6, HttpResponse(entity = noContentType, headers = Vector(cacheHeader)))
 
       assertEquals(counter.get(), 3)
+    }
+  }
+
+  test("The settings overloads use the given strict timeout") {
+    val settings  = VcrSettings(new InMemoryVcrStorage())
+    val neverEnds = HttpRequest(
+      HttpMethods.POST,
+      Uri("/slow"),
+      entity = HttpEntity(ContentTypes.`application/octet-stream`, Source.maybe[ByteString])
+    )
+    val clients   = Seq(
+      VcrHttp.create(_ => Future.failed(new IllegalStateException("not sent")), settings, 100.millis),
+      VcrHttp.useClassicActorSystem(settings, None, 100.millis)
+    )
+
+    Future.traverse(clients)(_.send(neverEnds).failed).map { errors =>
+      assert(errors.forall(_.isInstanceOf[TimeoutException]), errors.toString)
     }
   }
 
@@ -143,7 +161,7 @@ class VcrHttpSpec extends FunSuite {
     val client = VcrHttp.useClassicActorSystem(
       new InMemoryVcrStorage(),
       RecordOptions.default.notRecordedThrowsErrors(true),
-      VcrMatcher.default.withShouldRecord(_ => false)
+      VcrMatcher.default.recordOnly(_ => false)
     )
 
     client.send(HttpRequest(uri = server.url("/counter"))).failed.map { error =>
@@ -154,7 +172,7 @@ class VcrHttpSpec extends FunSuite {
 
   server.test("Requests rejected by shouldRecord are sent but not recorded") { server =>
     val client =
-      VcrHttp.useClassicActorSystem(new InMemoryVcrStorage(), matcher = VcrMatcher.default.withShouldRecord(_ => false))
+      VcrHttp.useClassicActorSystem(new InMemoryVcrStorage(), matcher = VcrMatcher.default.recordOnly(_ => false))
 
     for {
       response <- client.send(HttpRequest(uri = server.url("/counter")))
