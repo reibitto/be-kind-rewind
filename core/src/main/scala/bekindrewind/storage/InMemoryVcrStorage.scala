@@ -9,12 +9,9 @@ import java.util.concurrent.atomic.AtomicReference
  */
 final class InMemoryVcrStorage() extends VcrStorage {
 
-  private val entriesRef: AtomicReference[VcrEntries] = new AtomicReference[VcrEntries]()
+  private val entriesRef: AtomicReference[Option[VcrEntries]] = new AtomicReference(None)
 
-  override def read(): Either[Throwable, VcrEntries] = entriesRef.get() match {
-    case null    => Left(new IllegalStateException("storage is empty"))
-    case entries => Right(entries)
-  }
+  override def read(): Either[Throwable, Option[VcrEntries]] = Right(entriesRef.get())
 
-  override def write(entries: VcrEntries): Unit = entriesRef.set(entries)
+  override def write(entries: VcrEntries): Unit = entriesRef.set(Some(entries))
 }

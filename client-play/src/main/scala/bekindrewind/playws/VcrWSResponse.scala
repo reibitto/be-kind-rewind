@@ -1,7 +1,8 @@
 package bekindrewind.playws
 
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
+import bekindrewind.playwsstandalone.PlayVcr
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import play.api.libs.json.{ JsValue, Json }
 import play.api.libs.ws.{ WSCookie, WSResponse }
 
@@ -13,15 +14,15 @@ final case class VcrWSResponse(
   status: Int,
   statusText: String,
   headers: Map[String, Seq[String]],
-  body: String
+  bodyAsBytes: ByteString
 ) extends WSResponse {
   override def underlying[T]: T = throw new Exception("VcrWSResponse does not have an underlying response.")
 
-  override def cookies: collection.Seq[WSCookie] = throw new NotImplementedError("`cookies` are not recorded")
+  override def cookies: Seq[WSCookie] = PlayVcr.cookies(headers)
 
   override def cookie(name: String): Option[WSCookie] = cookies.find(_.name == name)
 
-  override def bodyAsBytes: ByteString = ByteString(body)
+  override def body: String = PlayVcr.bodyAsString(headers, bodyAsBytes)
 
   override def bodyAsSource: Source[ByteString, _] = Source.single(bodyAsBytes)
 
@@ -30,4 +31,17 @@ final case class VcrWSResponse(
   override def xml: Elem = XML.loadString(body)
 
   override def json: JsValue = Json.parse(body)
+}
+
+object VcrWSResponse {
+
+  /** The replayed response for a recorded entry, as returned for `uri`. */
+  def replay(entry: bekindrewind.VcrEntry, uri: URI): VcrWSResponse =
+    VcrWSResponse(
+      uri,
+      entry.response.statusCode,
+      entry.response.statusText,
+      bekindrewind.playwsstandalone.PlayVcr.replayHeaders(entry),
+      ByteString(entry.response.bodyBytes)
+    )
 }

@@ -1,17 +1,15 @@
 package bekindrewind.playws
 
-import akka.stream.Materializer
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import bekindrewind.{ VcrClient, VcrEntry, VcrRequest, VcrResponse }
+import bekindrewind.playwsstandalone.PlayVcr
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import play.api.libs.ws._
 import play.api.mvc.MultipartFormData
 
 import java.io.File
 import java.net.URI
-import java.time.OffsetDateTime
+import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ ExecutionContextExecutor, Future }
 
 class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
   implicit def toVcrWSRequest(req: WSRequest): VcrWSRequest =
@@ -57,6 +55,8 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
 
   override def withCookies(cookies: WSCookie*): VcrWSRequest = req.withCookies(cookies: _*)
 
+  override def addCookies(cookies: WSCookie*): VcrWSRequest = req.addCookies(cookies: _*)
+
   override def withFollowRedirects(follow: Boolean): VcrWSRequest = req.withFollowRedirects(follow)
 
   override def withRequestTimeout(timeout: Duration): VcrWSRequest = req.withRequestTimeout(timeout)
@@ -70,6 +70,9 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
   override def withUrl(url: String): VcrWSRequest = req.withUrl(url)
 
   override def withMethod(method: String): VcrWSRequest = req.withMethod(method)
+
+  override def withDisableUrlEncoding(disableUrlEncoding: Boolean): VcrWSRequest =
+    req.withDisableUrlEncoding(disableUrlEncoding)
 
   override def withBody[T: BodyWritable](body: T): VcrWSRequest = req.withBody(body)
 
@@ -90,74 +93,20 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
   override def execute(method: String): Future[Response] =
     withMethod(method).execute()
 
-  override def execute(): Future[Response] = {
-    implicit val ec: ExecutionContextExecutor = owner.materializer.executionContext
-    implicit val mat: Materializer            = owner.materializer
+  override def execute(): Future[Response] =
+    PlayVcr.bufferSourceBody(req)(owner.materializer) match {
+      case Some(buffered) => buffered.flatMap(new VcrWSRequest(_, owner).execute())(owner.materializer.executionContext)
+      case None           =>
+        PlayVcr.execute[Response](
+          owner,
+          req,
+          () => req.execute(method),
+          entry => VcrWSResponse.replay(entry, req.uri)
+        )(owner.materializer)
+    }
 
-    for {
-      requestBodyString <- bodyAsString
-      vcrRequest         = VcrRequest(
-                             req.method,
-                             req.uri,
-                             requestBodyString,
-                             req.headers,
-                             "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
-                           )
-      response          <- owner.findMatch(vcrRequest) match {
-                             case Some(entry) =>
-                               Future.successful(
-                                 VcrWSResponse(
-                                   entry.request.uri,
-                                   entry.response.statusCode,
-                                   entry.response.statusText,
-                                   entry.response.headers + (VcrClient.vcrCacheHeaderName -> Seq("true")),
-                                   entry.response.body
-                                 )
-                               )
-
-                             case None if owner.matcher.shouldRecord(vcrRequest) =>
-                               for {
-                                 res <- req.execute(method).map { res =>
-                                          val entry = VcrEntry(
-                                            VcrRequest(
-                                              req.method,
-                                              req.uri,
-                                              requestBodyString,
-                                              req.headers,
-                                              "HTTP/1.1" // TODO: This assumes HTTP/1.1 is being used. Find a way to get the protocol from the HTTP library itself
-                                            ),
-                                            VcrResponse(
-                                              res.status,
-                                              res.statusText,
-                                              res.headers.map { case (k, v) =>
-                                                (k, v.toSeq)
-                                              },
-                                              res.body,
-                                              Some(res.contentType)
-                                            ),
-                                            OffsetDateTime.now
-                                          )
-
-                                          owner.addNewEntry(entry)
-
-                                          res
-                                        }
-                               } yield res
-
-                             case None if owner.recordOptions.notRecordedThrowsErrors =>
-                               Future.failed(
-                                 new Exception(
-                                   s"Recording is disabled for `${vcrRequest.method} ${vcrRequest.uri}`. The HTTP request was not executed."
-                                 )
-                               )
-
-                             case None =>
-                               req.execute(method)
-                           }
-    } yield response
-  }
-
-  override def stream(): Future[Response] = req.stream()
+  // The response is buffered so that it can be recorded. Its body can still be read with `bodyAsSource`.
+  override def stream(): Future[Response] = execute()
 
   override def withHeaders(headers: (String, String)*): VcrWSRequest = req.withHttpHeaders(headers: _*)
 
@@ -177,11 +126,4 @@ class VcrWSRequest(req: WSRequest, owner: VcrWSClient) extends WSRequest {
 
   override def put(body: Source[MultipartFormData.Part[Source[ByteString, _]], _]): Future[Response] =
     put[Source[MultipartFormData.Part[Source[ByteString, _]], _]](body)
-
-  private def bodyAsString(implicit materializer: Materializer): Future[String] =
-    req.body match {
-      case EmptyBody          => Future.successful("")
-      case InMemoryBody(ws)   => Future.successful(ws.utf8String)
-      case SourceBody(source) => source.runFold("")(_ + _.utf8String)
-    }
 }

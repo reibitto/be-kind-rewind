@@ -2,34 +2,84 @@ package bekindrewind
 
 import java.net.URI
 import java.time.OffsetDateTime
-import java.util.concurrent.atomic.AtomicInteger
 
-final case class VcrEntry(request: VcrRequest, response: VcrResponse, recordedAt: OffsetDateTime)
+/** @param testName Name of the test that recorded this entry, to make recordings easier to read. */
+final case class VcrEntry(
+  request: VcrRequest,
+  response: VcrResponse,
+  recordedAt: OffsetDateTime,
+  testName: Option[String] = None
+)
 
+/**
+ * @param body
+ *   The body as text, or base64 for binary bodies (see `bodyEncoding`). Use `bodyBytes` for the exact bytes.
+ * @param httpVersion
+ *   Protocol version the request was sent with, if the HTTP client exposes it.
+ */
 final case class VcrRequest(
   method: String,
   uri: URI,
   body: String,
   headers: Map[String, Seq[String]],
-  httpVersion: String
-)
+  httpVersion: Option[String] = None,
+  bodyEncoding: BodyEncoding = BodyEncoding.Text
+) {
+  def bodyBytes: Array[Byte] = bodyEncoding.decode(body)
+}
 
+object VcrRequest {
+  def fromBytes(
+    method: String,
+    uri: URI,
+    body: Array[Byte],
+    headers: Map[String, Seq[String]],
+    httpVersion: Option[String]
+  ): VcrRequest = {
+    val (encoded, encoding) = BodyEncoding.encode(body, BodyEncoding.charsetOf(headers))
+    VcrRequest(method, uri, encoded, headers, httpVersion, encoding)
+  }
+}
+
+/**
+ * @param body
+ *   The body as text, or base64 for binary bodies (see `bodyEncoding`). Use `bodyBytes` for the exact bytes.
+ * @param httpVersion
+ *   Protocol version of the response, if the HTTP client exposes it.
+ */
 final case class VcrResponse(
   statusCode: Int,
   statusText: String,
   headers: Map[String, Seq[String]],
   body: String,
-  contentType: Option[String]
-)
-
-final case class VcrEntries(entries: Vector[VcrEntry], version: String, expiration: Option[OffsetDateTime] = None)
-
-final case class StatefulVcrEntries(entries: Vector[VcrEntry], currentIndex: AtomicInteger) {
-  def append(entry: VcrEntry): StatefulVcrEntries =
-    copy(entries = entries :+ entry)
+  contentType: Option[String],
+  httpVersion: Option[String] = None,
+  bodyEncoding: BodyEncoding = BodyEncoding.Text
+) {
+  def bodyBytes: Array[Byte] = bodyEncoding.decode(body)
 }
 
-object StatefulVcrEntries {
-  def create(entries: Vector[VcrEntry]): StatefulVcrEntries =
-    StatefulVcrEntries(entries, new AtomicInteger(0))
+object VcrResponse {
+  def fromBytes(
+    statusCode: Int,
+    statusText: String,
+    headers: Map[String, Seq[String]],
+    body: Array[Byte],
+    contentType: Option[String],
+    httpVersion: Option[String]
+  ): VcrResponse = {
+    val (encoded, encoding) =
+      BodyEncoding.encode(body, contentType.flatMap(BodyEncoding.charsetOf).orElse(BodyEncoding.charsetOf(headers)))
+    VcrResponse(statusCode, statusText, headers, encoded, contentType, httpVersion, encoding)
+  }
 }
+
+final case class VcrEntries(entries: Vector[VcrEntry], version: String)
+
+/**
+ * A group of equivalent recorded entries. Which of them have been replayed is tracked by the [[VcrRecording]].
+ *
+ * @param positions
+ *   Where each entry is in the recording.
+ */
+final case class VcrEntryGroup(entries: Vector[VcrEntry], positions: Vector[Int])

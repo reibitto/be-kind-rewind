@@ -1,11 +1,9 @@
 package bekindrewind.playwsstandalone
 
-import akka.stream.Materializer
 import bekindrewind.storage.VcrStorage
-import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher }
+import bekindrewind.{ RecordOptions, VcrClient, VcrMatcher, VcrSettings }
+import org.apache.pekko.stream.Materializer
 import play.api.libs.ws.{ StandaloneWSClient, StandaloneWSRequest }
-
-import scala.util.Try
 
 class VcrStandaloneWSClient(
   val underlyingClient: StandaloneWSClient,
@@ -22,10 +20,10 @@ class VcrStandaloneWSClient(
   override def url(url: String): StandaloneWSRequest =
     new VcrStandaloneWSRequest(underlyingClient.url(url), this)
 
-  override def close(): Unit = {
-    Try(save()).failed.foreach(_.printStackTrace())
-    underlyingClient.close()
-  }
+  /** Closes the underlying client, then rethrows any error from saving (e.g. because of unused entries). */
+  override def close(): Unit =
+    try save()
+    finally underlyingClient.close()
 }
 
 object VcrStandaloneWSClient {
@@ -33,7 +31,12 @@ object VcrStandaloneWSClient {
     underlyingClient: StandaloneWSClient,
     storage: VcrStorage,
     recordOptions: RecordOptions = RecordOptions.default,
-    matcher: VcrMatcher = VcrMatcher.groupBy(r => (r.method, r.uri))
-  )(implicit materializer: Materializer) =
+    matcher: VcrMatcher = VcrMatcher.default
+  )(implicit materializer: Materializer): VcrStandaloneWSClient =
     new VcrStandaloneWSClient(underlyingClient, storage, recordOptions, matcher)
+
+  def apply(underlyingClient: StandaloneWSClient, settings: VcrSettings)(implicit
+    materializer: Materializer
+  ): VcrStandaloneWSClient =
+    apply(underlyingClient, settings.storage, settings.recordOptions, settings.matcher)
 }

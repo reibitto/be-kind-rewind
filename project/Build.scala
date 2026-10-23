@@ -2,78 +2,87 @@ import sbt.Keys._
 import sbt._
 
 object Build {
-  val Scala213Version = "2.13.11"
+  val Scala213Version = "2.13.18"
 
-  val Scala212Version = "2.12.18"
-
-  val BeKindRewindVersion = "0.1.0"
+  // The LTS version, so that projects on any later Scala 3 version can use the library.
+  val Scala3Version = "3.3.8"
 
   object Version {
-    val circe = "0.14.5"
-
-    val circeYaml = "0.14.2"
-
-    val sttp = "3.8.16"
-
-    val munit = "0.7.29"
-
-    val akka = "2.6.20"
-
-    val akkaHttp = "10.2.10"
+    val circe            = "0.14.15"
+    val circeYaml        = "0.16.1"
+    val sttp             = "3.11.0"
+    val sttp4            = "4.0.26"
+    val scalaTest        = "3.2.20"
+    val scalaXml         = "2.5.0"
+    val zio              = "2.1.26"
+    val munit            = "1.3.6"
+    val munitScalaCheck  = "1.3.1"
+    val pekko            = "1.7.0"
+    val pekkoHttp        = "1.4.0"
+    val playWs           = "3.0.11"
+    val playWsStandalone = "3.0.14"
   }
 
-  lazy val ScalacOptions = Def.setting(
-    Seq(
+  lazy val ScalacOptions = Def.setting {
+    val common = Seq(
       "-encoding",
       "UTF-8",
+      "-release",
+      "11",
       "-unchecked",
       "-deprecation",
       "-feature",
-      "-language:postfixOps",
       "-language:implicitConversions",
       "-language:higherKinds",
-      "-Xfatal-warnings",
-      "-Xlint:nullary-unit",           // Warn when nullary methods return Unit.
-      "-Xlint:inaccessible",           // Warn about inaccessible types in method signatures.
-      "-Xlint:missing-interpolator",   // A string literal appears to be missing an interpolator id.
-      "-Xlint:doc-detached",           // A Scaladoc comment appears to be detached from its element.
-      "-Xlint:private-shadow",         // A private field (or class parameter) shadows a superclass field.
-      "-Xlint:type-parameter-shadow",  // A local type parameter shadows a type already in scope.
-      "-Xlint:delayedinit-select",     // Selecting member of DelayedInit.
-      "-Xlint:stars-align",            // Pattern sequence wildcard must align with sequence component.
-      "-Xlint:option-implicit",        // Option.apply used implicit view.
-      "-Xlint:poly-implicit-overload", // Parameterized overloaded implicit methods are not visible as view bounds.
-      "-Ywarn-extra-implicit"          // Warn when more than one implicit parameter section is defined.
-    ) ++
-      Seq(
-        "-Ywarn-unused:imports",  // Warn if an import selector is not referenced.
-        "-Ywarn-unused:locals",   // Warn if a local definition is unused.
-        "-Ywarn-unused:privates", // Warn if a private member is unused.
-        "-Ywarn-unused:implicits" // Warn if an implicit parameter is unused.
-      ).filter(_ => shouldWarnForUnusedCode)
-  )
+      "-Werror"
+    )
+
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, _)) =>
+        common ++ Seq(
+          "-Xlint:nullary-unit",           // Warn when nullary methods return Unit.
+          "-Xlint:inaccessible",           // Warn about inaccessible types in method signatures.
+          "-Xlint:missing-interpolator",   // A string literal appears to be missing an interpolator id.
+          "-Xlint:doc-detached",           // A Scaladoc comment appears to be detached from its element.
+          "-Xlint:private-shadow",         // A private field (or class parameter) shadows a superclass field.
+          "-Xlint:type-parameter-shadow",  // A local type parameter shadows a type already in scope.
+          "-Xlint:delayedinit-select",     // Selecting member of DelayedInit.
+          "-Xlint:stars-align",            // Pattern sequence wildcard must align with sequence component.
+          "-Xlint:option-implicit",        // Option.apply used implicit view.
+          "-Xlint:poly-implicit-overload", // Parameterized overloaded implicit methods are not visible as view bounds.
+          "-Xlint:adapted-args",           // An argument list was modified to match the receiver.
+          "-Wextra-implicit"               // Warn when more than one implicit parameter section is defined.
+        ) ++
+          Seq(
+            "-Wunused:imports",  // Warn if an import selector is not referenced.
+            "-Wunused:locals",   // Warn if a local definition is unused.
+            "-Wunused:privates", // Warn if a private member is unused.
+            "-Wunused:implicits" // Warn if an implicit parameter is unused.
+          ).filter(_ => shouldWarnForUnusedCode)
+      case _            =>
+        common ++ Seq("-Wunused:imports", "-Wunused:locals", "-Wunused:privates").filter(_ => shouldWarnForUnusedCode)
+    }
+  }
 
   def defaultSettings(projectName: String) =
     Seq(
-      name                           := projectName,
+      name               := projectName,
       Test / javaOptions += "-Duser.timezone=UTC",
-      scalacOptions                  := ScalacOptions.value,
-      ThisBuild / scalaVersion       := Scala213Version,
-      ThisBuild / crossScalaVersions := Seq(Scala213Version, Scala212Version),
-      libraryDependencies ++= Plugins.BaseCompilerPlugins,
-      incOptions ~= (_.withLogRecompileOnMacro(false)),
-      autoAPIMappings                := true,
-      resolvers                      := Resolvers,
-      testFrameworks                 := Seq(new TestFramework("munit.Framework")),
-      Test / fork                    := true,
-      Test / logBuffered             := false
+      scalacOptions      := ScalacOptions.value,
+      libraryDependencies ++= (CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((2, _)) => Seq(compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"))
+        case _            => Seq.empty
+      }),
+      autoAPIMappings    := true,
+      // Scala 3 scaladoc also checks links in docs inherited from dependencies, which we can't fix.
+      Compile / doc / scalacOptions ++= (CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((3, _)) => Seq("-no-link-warnings")
+        case _            => Seq.empty
+      }),
+      testFrameworks     := Seq(new TestFramework("munit.Framework")),
+      Test / fork        := true,
+      Test / logBuffered := false
     )
-
-  // Order of resolvers affects resolution time. More general purpose repositories should come first.
-  lazy val Resolvers =
-    Resolver.sonatypeOssRepos("releases") ++
-      Seq(Resolver.typesafeRepo("releases"), Resolver.jcenterRepo) ++
-      Resolver.sonatypeOssRepos("snapshots")
 
   def compilerFlag(key: String, default: Boolean): Boolean = {
     val flag = sys.props.get(key).orElse {
