@@ -11,7 +11,7 @@ object Build {
     val circe            = "0.14.15"
     val circeYaml        = "0.16.1"
     val sttp             = "3.11.0"
-    val sttp4            = "4.0.26"
+    val sttp4            = "4.0.27"
     val scalaTest        = "3.2.20"
     val scalaXml         = "2.5.0"
     val zio              = "2.1.26"
