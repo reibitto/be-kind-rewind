@@ -14,7 +14,7 @@ object Build {
     val sttp4            = "4.0.26"
     val scalaTest        = "3.2.20"
     val scalaXml         = "2.5.0"
-    val zio              = "2.1.26"
+    val zio              = "2.1.27"
     val munit            = "1.3.6"
     val munitScalaCheck  = "1.3.1"
     val pekko            = "1.7.0"
