@@ -8,7 +8,7 @@ object Build {
   val Scala3Version = "3.3.8"
 
   object Version {
-    val circe            = "0.14.15"
+    val circe            = "0.14.17"
     val circeYaml        = "0.16.1"
     val sttp             = "3.11.0"
     val sttp4            = "4.0.26"
