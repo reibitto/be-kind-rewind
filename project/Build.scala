@@ -19,7 +19,7 @@ object Build {
     val munitScalaCheck  = "1.3.1"
     val pekko            = "1.7.0"
     val pekkoHttp        = "1.4.0"
-    val playWs           = "3.0.11"
+    val playWs           = "3.0.12"
     val playWsStandalone = "3.0.14"
   }
 
