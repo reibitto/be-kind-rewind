@@ -5,7 +5,7 @@ object Build {
   val Scala213Version = "2.13.18"
 
   // The LTS version, so that projects on any later Scala 3 version can use the library.
-  val Scala3Version = "3.3.8"
+  val Scala3Version = "3.3.9"
 
   object Version {
     val circe            = "0.14.15"
